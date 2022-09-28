@@ -1,2 +1,3 @@
-# python-project
-A template for a containerized Python project
+# Python Flask Project
+
+A template for a containerized Flask project

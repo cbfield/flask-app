@@ -1,0 +1,10 @@
+Dockerfile
+LICENSE
+README.md
+tests
+*.pyc
+*.pyo
+*.pyd
+__pycache__
+.gitignore
+.pytest_cache
