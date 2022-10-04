@@ -8,11 +8,14 @@ on:
       - "v*.*.*"
   pull_request:
     branches:
-      - "main"
+      - main
 
 jobs:
   Build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -21,7 +24,7 @@ jobs:
         uses: google-github-actions/auth@v0
         with:
           service_account: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
-          token_format: "access_token"
+          token_format: access_token
           workload_identity_provider: ${{ secrets.GOOGLE_WIP }}
       - name: Login to Artifact Registry
         uses: docker/login-action@v1
