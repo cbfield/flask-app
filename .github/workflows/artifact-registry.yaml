@@ -23,6 +23,7 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v0
         with:
+          access_token_lifetime: 300s
           service_account: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
           workload_identity_provider: ${{ secrets.GOOGLE_WIP }}
       - name: Login to Artifact Registry
