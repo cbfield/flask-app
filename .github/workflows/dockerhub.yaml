@@ -11,7 +11,7 @@ on:
       - "main"
 
 jobs:
-  docker:
+  Build:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
