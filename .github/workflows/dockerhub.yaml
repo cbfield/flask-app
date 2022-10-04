@@ -1,4 +1,4 @@
-name: Publish Docker image
+name: Publish Image to Dockerhub
 
 on:
   push:
@@ -34,9 +34,10 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha
-      - name: Build and push
+      - name: Build and Push
         uses: docker/build-push-action@v3
         with:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
