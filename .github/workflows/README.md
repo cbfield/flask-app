@@ -10,9 +10,7 @@ These workflows build images that are compatible with the platforms `linux/amd64
 
 Tags will be created for each image based on the event that triggered the workflow.
 
-- A tag matching the short SHA of the commit that triggered the workflow will always be created
 - A tag matching a branch name will be created when branches are pushed
-- A tag matching a pull request ID will be created when pull requests against the main branch are pushed to
 - When a Git tag matching `v*.*.*` is pushed, three tags will be created (example for `v1.2.3` tag push):
   - `1.2.3`
   - `1.2`
