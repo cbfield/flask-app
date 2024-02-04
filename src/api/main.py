@@ -1,6 +1,6 @@
 from flask import Blueprint, make_response
 
-api = Blueprint('api', __name__)
+api = Blueprint("api", __name__)
 
 
 @api.route('/', methods=['GET'])
