@@ -10,4 +10,5 @@ for blueprint in web_blueprints:
     app.register_blueprint(blueprint)
 
 for blueprint in api_blueprints:
-    app.register_blueprint(blueprint, url_prefix="/api/v1/")
+    app.register_blueprint(
+        blueprint, url_prefix="/api/v1/")
