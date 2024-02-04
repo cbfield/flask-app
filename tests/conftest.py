@@ -6,11 +6,11 @@ sys.path.insert(0, os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..')
 ))
 
-from web import app as webapp
+from src import app as flask_app
 
 @pytest.fixture()
 def app():
-    yield webapp
+    yield flask_app
 
 
 @pytest.fixture()

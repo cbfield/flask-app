@@ -1,4 +1,4 @@
-FROM alpine:3.16.2 AS base
+FROM alpine:3.19.1 AS base
 
 FROM base AS build
 
@@ -26,4 +26,4 @@ ENV FLASK_PORT=5000
 ENV GUNICORN_THREADS=8
 ENV GUNICORN_WORKERS=2
 
-CMD gunicorn -b=0.0.0.0:${FLASK_PORT} -w=${GUNICORN_WORKERS} -t=${GUNICORN_THREADS} web.wsgi:app
+CMD gunicorn -b=0.0.0.0:${FLASK_PORT} -w=${GUNICORN_WORKERS} -t=${GUNICORN_THREADS} src.wsgi:app
