@@ -1,6 +1,11 @@
 #!/usr/bin/env just --justfile
 
+default:
+  @just --list
+
 image := "cbfield/flask-app:latest"
+port := "5001"
+log_level := "DEBUG"
 
 build:
     docker build -t {{image}} .
@@ -9,10 +14,10 @@ test: build
     pytest
 
 run: build
-    docker run -it -p 5001:5000 -e LOG_LEVEL=DEBUG {{image}}
+    docker run -it -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
 
-running PORT="5001":
-    test $(lsof -i:{{PORT}} | wc -l) -gt 0
+running:
+    test $(lsof -i:{{port}} | wc -l) -gt 0
 
 jq *ARGS:
     #!/usr/bin/env -S bash -eo pipefail
