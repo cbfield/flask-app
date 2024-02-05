@@ -10,7 +10,7 @@ src = import_module("src", package="src")
 
 @fixture()
 def app():
-    yield getattr(src, "app")
+    yield src.app
 
 
 @fixture()
