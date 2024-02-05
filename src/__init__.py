@@ -1,6 +1,6 @@
 import logging.config
 from json import load as json_load
-from os import urandom, environ
+from os import environ, urandom
 from pathlib import Path
 
 from flask import Flask

@@ -1,4 +1,4 @@
-from logging import getLogger, getLevelName
+from logging import getLevelName, getLogger
 from os import environ
 
 from flask import Blueprint, make_response, render_template, request
