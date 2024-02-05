@@ -1,18 +1,18 @@
-import os
-import pytest
-import sys
+from importlib import import_module
+from pathlib import Path
+from sys import path
 
-sys.path.insert(0, os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..')
-))
+from pytest import fixture
 
-from src import app as flask_app
+path.append(str(Path(__file__).parent.parent))
+src = import_module("src", package="src")
 
-@pytest.fixture()
+
+@fixture()
 def app():
-    yield flask_app
+    yield src.app
 
 
-@pytest.fixture()
+@fixture()
 def client(app):
     return app.test_client()
