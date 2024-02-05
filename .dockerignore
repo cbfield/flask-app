@@ -6,5 +6,6 @@ tests
 *.pyo
 *.pyd
 __pycache__
+*.egg-info
 .gitignore
 .pytest_cache

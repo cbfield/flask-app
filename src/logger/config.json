@@ -10,7 +10,7 @@
             "datefmt": "%Y-%m-%dT%H:%M:%S%z"
         },
         "json": {
-            "()": "src.logging_config.JsonLinesFormatter"
+            "()": "src.logger.JsonLinesFormatter"
         }
     },
     "handlers": {
@@ -33,7 +33,7 @@
     },
     "filters": {
         "regex": {
-            "()": "src.logging_config.RegexFilter",
+            "()": "src.logger.RegexFilter",
             "pattern": "a-regular-expression",
             "substitute": "a-string-to-replace-it-with"
         }
