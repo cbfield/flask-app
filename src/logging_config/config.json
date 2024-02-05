@@ -1,0 +1,50 @@
+{
+    "version": 1,
+    "disable_existing_loggers": false,
+    "formatters": {
+        "simple": {
+            "format": "%(levelname)s: %(message)s"
+        },
+        "detailed": {
+            "format": "[%(levelname)s|%(pathname)s|L%(lineno)d] %(asctime)s: %(message)s",
+            "datefmt": "%Y-%m-%dT%H:%M:%S%z"
+        },
+        "json": {
+            "()": "src.logging_config.JsonLinesFormatter"
+        }
+    },
+    "handlers": {
+        "stderr": {
+            "class": "logging.StreamHandler",
+            "formatter": "detailed",
+            "filters": [ ],
+            "stream": "ext://sys.stderr"
+        },
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "level": "INFO",
+            "formatter": "json",
+            "filters": [ ],
+            "filename": "/var/log/flask/app.log",
+            "maxBytes": 1024,
+            "backupCount": 3,
+            "delay": true
+        }
+    },
+    "filters": {
+        "regex": {
+            "()": "src.logging_config.RegexFilter",
+            "pattern": "a-regular-expression",
+            "substitute": "a-string-to-replace-it-with"
+        }
+    },
+    "loggers": {
+        "root": {
+            "level": "WARNING",
+            "handlers": [
+                "stderr",
+                "file"
+            ]
+        }
+    }
+}

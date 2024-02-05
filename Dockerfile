@@ -15,6 +15,7 @@ FROM base AS runtime
 RUN apk update && apk add python3-dev
 
 RUN adduser -D flask
+RUN mkdir -p /var/log/flask && chown -R flask:flask /var/log/flask
 USER flask
 WORKDIR /home/flask
 ADD . .

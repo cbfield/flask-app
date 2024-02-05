@@ -1,6 +1,6 @@
-from pkgutil import iter_modules
 from importlib import import_module
 from os import path
+from pkgutil import iter_modules
 
 blueprints = []
 for module in iter_modules([path.dirname(__file__)]):
