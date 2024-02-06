@@ -10,6 +10,17 @@ log_level := "DEBUG"
 build:
     docker build -t {{image}} .
 
+compile:
+    pip-compile --strip-extras -o requirements.txt requirements.in
+
+compile-dev:
+    pip-compile --strip-extras -o requirements-dev.txt requirements-dev.in
+
+compile-test:
+    pip-compile --strip-extras -o requirements-test.txt requirements-test.in
+
+compile-all: compile compile-dev compile-test
+
 test: build
     python -m pytest
 
