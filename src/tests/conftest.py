@@ -1,5 +1,7 @@
-from src import app
 from pytest import fixture
+
+from src import app
+
 
 @fixture()
 def app():
