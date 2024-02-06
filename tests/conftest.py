@@ -1,11 +1,11 @@
 from pytest import fixture
+from importlib import import_module
 
-from src import app
-
+from src import app as flaskapp
 
 @fixture()
 def app():
-    yield app
+    yield flaskapp
 
 
 @fixture()

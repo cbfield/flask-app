@@ -11,7 +11,7 @@ build:
     docker build -t {{image}} .
 
 test: build
-    pytest
+    python -m pytest
 
 run: build
     docker run -it -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
