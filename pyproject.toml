@@ -1,0 +1,19 @@
+[project]
+name = "flask-app"
+version = "0.1.0"
+description = "A Flask Application"
+requires-python = ">=3.9"
+dependencies = ["flask", "gunicorn"]
+optional-dependencies = { dev = ["pip-tools", "pytest"] }
+license = { file = "LICENSE" }
+keywords = ["flask", "gunicorn", "docker", "api"]
+dynamic = ["readme"]
+
+[tool.setuptools.dynamic]
+readme = { file = ["README.md"] }
+dependencies = { file = ["requirements.in"] }
+optional-dependencies.dev = { file = ["requirements-dev.in"] }
+
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"

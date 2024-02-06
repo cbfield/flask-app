@@ -3,8 +3,8 @@ from os import environ
 
 from flask import Blueprint, make_response, request
 
-api = Blueprint("api", __name__)
-log = getLogger("MyApp-API-v1")
+api = Blueprint("api", __package__)
+log = getLogger("%s-API-v1" % __package__)
 if "LOG_LEVEL" in environ:
     log.setLevel(getLevelName(environ.get("LOG_LEVEL")))
 
