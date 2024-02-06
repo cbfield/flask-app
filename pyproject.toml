@@ -3,10 +3,8 @@ name = "flask-app"
 version = "0.1.0"
 description = "A Flask Application"
 requires-python = ">=3.9"
-dependencies = ["flask", "gunicorn"]
-optional-dependencies = { dev = ["pip-tools", "pytest"] }
 license = { file = "LICENSE" }
-keywords = ["flask", "gunicorn", "docker", "api"]
+keywords = ["flask", "gunicorn", "docker", "api", "web"]
 dynamic = ["readme"]
 
 [tool.setuptools.dynamic]
