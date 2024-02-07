@@ -83,8 +83,9 @@ install-jq VERSION="$(utils/jq-latest.sh)" INSTALL_DIR="~/bin" TARGET="$(uname -
         printf "You can add it to your path by running this:\n\n❯ export PATH={{INSTALL_DIR}}:\$PATH\n\n"
     fi
 
-restart: build && run
+restart: build
     nc -z localhost {{port}} >/dev/null 2>&1 && just stop || :
+    docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
 
 run: build
     docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
