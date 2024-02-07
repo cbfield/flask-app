@@ -24,7 +24,7 @@ api HOST="localhost" PATH="/" TIMEOUT="5" RETRIES="3" DELAY="1" MAX_TIME="10" RE
         --no-progress-meter \
         http://{{HOST}}:{{port}}/api/v1{{PATH}}
 
-build:
+build: start-docker
     docker build -t {{image}} .
 
 build-requirements *FLAGS:
@@ -89,20 +89,35 @@ restart: build && run
 run: build
     docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
 
-status CONTAINERS="$(just get-dev-containers)":
+# TODO implement for linux/ windows
+start-docker:
+    #!/usr/bin/env -S bash -euo pipefail
+    if ( ! docker stats --no-stream 2>/dev/null ); then
+        echo "Starting the Docker daemon..."
+        open /Applications/Docker.app
+        while ( ! docker stats --no-stream 2>/dev/null ); do
+            sleep 1
+        done
+    fi
+
+status CONTAINERS="$(just get-dev-containers 2>/dev/null)":
     #!/usr/bin/env -S bash -euo pipefail
     if [[ -z {{CONTAINERS}} ]]; then
         printf "\nNo development containers.\n\n";
     else
         printf "\nDevelopment Containers:\n\n"
         format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
-        if ! command -v jq >/dev/null; then
-            docker ps --format=json | docker run -i --rm ghcr.io/jqlang/jq "$format"
-        else
-            docker ps --format=json | jq "$format"; echo
-        fi
+        if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
+        docker ps --format=json 2>/dev/null | eval '$jq "$format"'; echo
     fi
-    printf "Containers:\n\n$(docker ps -a)\n\nImages:\n\n$(docker images)\n\n"
+    printf "Docker Stats:\n\n"
+    if ( docker stats --no-stream 2>/dev/null ); then
+        containers=$(docker ps -a)
+        images=$(docker images)
+        printf "\nContainers:\n\n%s\n\nImages:\n\n%s\n\n" "$containers" "$images"
+    else
+        printf "Daemon stopped.\n\n"
+    fi
 
 stop CONTAINERS="$(just get-dev-containers)":
     if [[ -n {{CONTAINERS}} ]]; then docker stop {{CONTAINERS}}; fi
