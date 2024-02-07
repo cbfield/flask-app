@@ -1,19 +1,30 @@
 #!/usr/bin/env just --justfile
 
+# TODO
+# install aws
+# install netcat
+# configure docker netcat fallback
+# test
+# lint
+# deploy
+
 # Variables
 
 image := "cbfield/flask-app:latest"
 port := "5001"
 log_level := "DEBUG"
+gh_token := `cat ~/.secret/gh_token`
 
 # Recipes
 
+# Show help and status info
 @default:
     just --list
     printf "\nStatus:\n"
     just status
 
-api HOST="localhost" PATH="/api/v1/":
+# Shortcut for testing APIs running on localhost
+api PATH="/api/v1/":
     curl \
         --connect-timeout 5 \
         --max-time 10 \
@@ -22,37 +33,55 @@ api HOST="localhost" PATH="/api/v1/":
         --retry-max-time 30 \
         --retry-connrefused \
         --no-progress-meter \
-        http://{{HOST}}:{{port}}{{PATH}}
+        http://localhost:{{port}}{{PATH}}
 
+# Build the app container with Docker
 build: start-docker
     docker build -t {{image}} .
 
-build-requirements *FLAGS:
-    just build-requirements-dev {{FLAGS}}
-    just build-requirements-test {{FLAGS}}
-    just build-requirements-prod {{FLAGS}}
+# Generate requirements*.txt from requirements*.in using pip-tools
+build-reqs *FLAGS:
+    just build-reqs-dev {{FLAGS}}
+    just build-reqs-test {{FLAGS}}
+    just build-reqs-deploy {{FLAGS}}
 
-build-requirements-dev *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements-dev.txt requirements-dev.in
-
-build-requirements-prod *FLAGS:
+# Generate requirements.txt from requirements.in using pip-tools
+build-reqs-deploy *FLAGS:
     pip-compile {{FLAGS}} --strip-extras -o requirements.txt requirements.in
 
-build-requirements-test *FLAGS:
+# Generate requirements-dev.txt from requirements-dev.in using pip-tools
+build-reqs-dev *FLAGS:
+    pip-compile {{FLAGS}} --strip-extras -o requirements-dev.txt requirements-dev.in
+
+# Generate requirements-test.txt from requirements-test.in using pip-tools
+build-reqs-test *FLAGS:
     pip-compile {{FLAGS}} --strip-extras -o requirements-test.txt requirements-test.in
 
+# Remove development containers and images
 clean: stop clean-containers clean-images
-clean-all: (stop "$(just get-all-containers)") clean-all-containers clean-all-images
 
+# Remove all containers and images
+clean-all: stop-all-containers clean-all-containers clean-all-images
+
+# Remove all containers
 clean-all-containers:
-    docker rm -vf $(docker ps -aq)
+    #!/usr/bin/env -S bash -euo pipefail
+    containers=$(docker ps -aq)
+    if [[ -n "$containers" ]]; then
+        docker rm -vf "$containers"
+    else
+        echo "No containers running."
+    fi
 
+# Remove all images
 clean-all-images:
     docker image prune --all --force
 
+# Remove containers by ID
 clean-containers CONTAINERS="$(just get-dev-containers)":
     docker rm -vf "{{CONTAINERS}}"
 
+# Remove images by ID
 clean-images IMAGES="$(just get-dev-images)":
     docker rmi $(docker images -f "dangling=true" -q)
     docker rmi "{{IMAGES}}"
@@ -79,19 +108,81 @@ docker-status:
 @get-dev-images:
     echo $(docker images -q)
 
-# Install jq via pre-built binary from the Github API (latest version by default)
-install-jq VERSION="" INSTALL_DIR="~/bin" TARGET="":
+# (JSON util) Return the first item in a JSON list. Return nothing if invalid JSON or type != list.
+_get-first-item:
+    #!/usr/bin/env -S python3
+    import json, sys
+    try:
+        d = json.load(sys.stdin)
+    except json.decoder.JSONDecodeError:
+        sys.exit()
+    if type(d) is list: 
+        print(json.dumps(d[0]))
+
+# (Github API util) Return the id of a given asset in a Github release
+_get-gh-release-asset-id ASSET:
+    #!/usr/bin/env -S python3
+    import json, sys
+    try:
+        d = json.load(sys.stdin)
+    except json.decoder.JSONDecodeError:
+        sys.exit()
+    print(next((a["id"] for a in d["assets"] if a["name"]=="{{ASSET}}"),""),end="")
+
+get-gh-release OWNER REPO TAG:
+    #!/usr/bin/env -S bash -euo pipefail
+    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
+    curl "$headers" -L --no-progress-meter https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
+
+get-gh-release-binary OWNER REPO TAG ASSET DEST:
+    #!/usr/bin/env -S bash -euo pipefail
+    printf "\nRetrieving Release Binary...\n\nOWNER:\t\t%s\nREPO:\t\t%s\nRELEASE TAG:\t%s\nTARGET:\t\t%s\nDESTINATION:\t%s\n\n" {{OWNER}} {{REPO}} {{TAG}} {{ASSET}} {{DEST}}
+    asset_id=$(just get-gh-release {{OWNER}} {{REPO}} {{TAG}} | just _get-gh-release-asset-id {{ASSET}})
+    if [[ -z "$asset_id" ]]; then
+        printf "Asset %s not found.\n\n" "{{ASSET}}" >&2; exit 1
+    fi
+    curl -L --no-progress-meter -o "{{DEST}}" \
+      -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}" \
+      https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/assets/$asset_id
+    chmod +x "{{DEST}}"
+
+get-latest-gh-release OWNER REPO:
+    #!/usr/bin/env -S bash -euo pipefail
+    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
+    releases=$(curl "$headers" -L --no-progress-meter https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
+    echo $releases | just _handle-gh-api-errors | just _get-first-item
+
+# (Github API util) Return unchanged JSON input if valid JSON and doesn't contain not-found or rate-limit-exceeded errors.
+_handle-gh-api-errors:
+    #!/usr/bin/env -S python3
+    import json, sys
+    try:
+        d = json.load(sys.stdin)
+    except json.decoder.JSONDecodeError:
+        sys.exit()
+    if 'message' in d and (d['message']=='Not Found' or d['message'].startswith('API rate limit exceeded')):
+        sys.exit()
+    print(json.dumps(d))
+
+# Install jq via pre-built binary from the Github API
+install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
     #!/usr/bin/env -S bash -euo pipefail
     version="{{VERSION}}"
-    if [[ -z "$version" ]]; then
+    if [[ "$version" == "latest" ]]; then
         echo "Looking up latest version..."
-        headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28"'
-        releases=$(curl -L --no-progress-meter "$headers" https://api.github.com/repos/jqlang/jq/releases)
-        version=$(echo "$releases" | python3 -c 'import sys, json; print(json.load(sys.stdin)[0]["tag_name"].split("-")[-1])')
-        printf "Found %s\n" "$version"
+        release=$(just get-latest-gh-release jqlang jq)
+        version=$(echo "$release" | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"].split("-")[-1])')
+        printf "Found %s\n" "$version."
+    else
+        printf "Validating version %s...\n" "$version"
+        release=$(just get-gh-release jqlang jq "jq-$version")
+        if [[ -n "$release" ]]; then
+            echo "Valid!"
+        else
+            printf "Version %s not found.\n\n" "$version" >&2; exit 1
+        fi
     fi
-    platform=$(uname -m)-$(uname -s | cut -d- -f1)
-    case "$platform" in
+    case $(uname -m)-$(uname -s | cut -d- -f1) in
         arm64-Darwin)       asset=jq-macos-arm64;;
         x86_64-Darwin)      asset=jq-macos-amd64;;
         x86_64-Linux)       asset=jq-linux-amd64;;
@@ -99,16 +190,9 @@ install-jq VERSION="" INSTALL_DIR="~/bin" TARGET="":
         x86_64-Windows_NT)  asset=jq-windows-amd64;;
     esac
     if [[ -n "{{TARGET}}" ]]; then
-        asset={{TARGET}}
+        asset="{{TARGET}}"
     fi
-    curl -L \
-        -H "Accept: application/vnd.github+json" \
-        -H "X-GitHub-Api-Version: 2022-11-28" \
-        -o {{INSTALL_DIR}}/jq \
-        --no-progress-meter \
-        https://github.com/jqlang/jq/releases/download/jq-"$version"/"$asset"
-    chmod +x {{INSTALL_DIR}}/jq
-    set +x
+    just get-gh-release-binary jqlang jq "jq-$version" "$asset" "{{INSTALL_DIR}}/jq"
     if command -v jq >/dev/null; then
         if jq --version >/dev/null; then
             printf "\njq installed: %s\n\n" $(jq --version)
@@ -171,10 +255,17 @@ status:
         printf "Daemon stopped.\n\n"
     fi
 
-# Stop the given containers
+# Stop containers by ID
 stop CONTAINERS="$(just get-dev-containers)":
-    if [[ -n {{CONTAINERS}} ]]; then docker stop {{CONTAINERS}}; fi
+    if [[ -n "{{CONTAINERS}}" ]]; then docker stop {{CONTAINERS}}; fi
 
-# TODO this
-test: build
-    python -m pytest
+alias stop-all := stop-all-containers
+# Stop all containers
+stop-all-containers:
+    #!/usr/bin/env -S bash -euo pipefail
+    containers=$(docker ps -aq)
+    if [[ -n "$containers" ]]; then
+        docker stop "$containers"
+    else
+        echo "No containers running."
+    fi
