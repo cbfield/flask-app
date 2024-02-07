@@ -13,13 +13,13 @@ log_level := "DEBUG"
     printf "\nStatus:\n"
     just status
 
-api HOST="localhost" PATH="/" TIMEOUT="5" RETRIES="3" DELAY="1" MAX_TIME="10" RETRY_MAX_TIME="40":
+api HOST="localhost" PATH="/":
     curl \
-        --connect-timeout {{TIMEOUT}} \
-        --max-time {{MAX_TIME}} \
-        --retry {{RETRIES}} \
-        --retry-delay {{DELAY}} \
-        --retry-max-time {{RETRY_MAX_TIME}} \
+        --connect-timeout 5 \
+        --max-time 10 \
+        --retry 3 \
+        --retry-delay 1 \
+        --retry-max-time 30 \
         --retry-connrefused \
         --no-progress-meter \
         http://{{HOST}}:{{port}}/api/v1{{PATH}}
@@ -42,55 +42,100 @@ build-requirements-test *FLAGS:
     pip-compile {{FLAGS}} --strip-extras -o requirements-test.txt requirements-test.in
 
 clean: stop clean-containers clean-images
-clean-all: (stop "$(just get-all-containers)") (clean-containers "$(just get-all-containers)") clean-images
+clean-all: (stop "$(just get-all-containers)") clean-all-containers clean-all-images
 
-clean-containers CONTAINERS="$(docker ps -aq)":
-    #!/usr/bin/env -S bash -euxo pipefail
-    if [[ -n "{{CONTAINERS}}" ]]; then
-        docker rm -vf {{CONTAINERS}}
-    fi
+clean-all-containers:
+    docker rm -vf $(docker ps -aq)
 
-clean-images:
+clean-all-images:
     docker image prune --all --force
 
-@get-all-containers +FLAGS="-q":
-    echo $(docker ps {{FLAGS}})
+clean-containers CONTAINERS="$(just get-dev-containers)":
+    docker rm -vf "{{CONTAINERS}}"
 
-@get-dev-containers +FLAGS="-q":
-    echo $(docker ps {{FLAGS}} --filter ancestor={{image}})
+clean-images IMAGES="$(just get-dev-images)":
+    docker rmi $(docker images -f "dangling=true" -q)
+    docker rmi "{{IMAGES}}"
 
-install-jq VERSION="$(utils/jq-latest.sh)" INSTALL_DIR="~/bin" TARGET="$(uname -m)-$(uname -s | cut -d- -f1)":
-    #!/usr/bin/env -S bash -euxo pipefail
-    case {{TARGET}} in
-        arm64-Darwin)      asset=jq-macos-arm64;;
-        x86_64-Darwin)     asset=jq-macos-amd64;;
-        x86_64-Linux)      asset=jq-linux-amd64;;
-        x86_64-MINGW64_NT) asset=jq-windows-amd64;;
-        x86_64-Windows_NT) asset=jq-windows-amd64;;
+# Pretty-print development container information
+dev-containers:
+    #!/usr/bin/env -S bash -euo pipefail
+    format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
+    if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
+    docker ps --filter ancestor={{image}} --format=json 2>/dev/null | eval '$jq "$format"'
+
+# Pretty-print Docker status information
+docker-status:
+    #!/usr/bin/env -S bash -euo pipefail
+    containers=$(docker ps -a)
+    images=$(docker images)
+    printf "\nContainers:\n\n%s\n\nImages:\n\n%s\n\n" "$containers" "$images"
+
+# List development container IDs
+@get-dev-containers:
+    echo $(docker ps -q --filter ancestor={{image}})
+
+# List development image IDs
+@get-dev-images:
+    echo $(docker images -q)
+
+# Install jq command-line tool via pre-built binary from the Github API (latest version by default)
+install-jq VERSION="" INSTALL_DIR="~/bin" TARGET="":
+    #!/usr/bin/env -S bash -euo pipefail
+    version="{{VERSION}}"
+    if [[ -z "$version" ]]; then
+        headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28"'
+        releases=$(curl -L --no-progress-meter "$headers" https://api.github.com/repos/jqlang/jq/releases)
+        version=$(echo "$releases" | python3 -c 'import sys, json; print(json.load(sys.stdin)[0]["tag_name"].split("-")[-1])')
+    fi
+
+    platform=$(uname -m)-$(uname -s | cut -d- -f1)
+    case "$platform" in
+        arm64-Darwin)       asset=jq-macos-arm64;;
+        x86_64-Darwin)      asset=jq-macos-amd64;;
+        x86_64-Linux)       asset=jq-linux-amd64;;
+        x86_64-MINGW64_NT)  asset=jq-windows-amd64;;
+        x86_64-Windows_NT)  asset=jq-windows-amd64;;
     esac
+    if [[ -n "{{TARGET}}" ]]; then
+        asset={{TARGET}}
+    fi
     curl -L \
         -H "Accept: application/vnd.github+json" \
         -H "X-GitHub-Api-Version: 2022-11-28" \
         -o {{INSTALL_DIR}}/jq \
         --no-progress-meter \
-        https://github.com/jqlang/jq/releases/download/jq-{{VERSION}}/"$asset"
+        https://github.com/jqlang/jq/releases/download/jq-"$version"/"$asset"
     chmod +x {{INSTALL_DIR}}/jq
     set +x
     if command -v jq >/dev/null; then
-        printf "\njq installed: %s\n\n" $(jq --version)
+        if jq --version >/dev/null; then
+            printf "\njq installed: %s\n\n" $(jq --version)
+        else
+            printf "\nInstallation failed!\n\n"
+        fi
     else
         printf "\njq installed successfully! But it doesn't appear to be on your \$PATH.\n"
         printf "You can add it to your path by running this:\n\n❯ export PATH={{INSTALL_DIR}}:\$PATH\n\n"
     fi
 
+# Build and run the app, restarting it if already running
 restart: build
     nc -z localhost {{port}} >/dev/null 2>&1 && just stop || :
     docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
 
-run: build
+# Build and run the app
+run:
+    #!/usr/bin/env -S bash -euo pipefail
+    if [[ -n $(just get-dev-containers) ]]; then
+        printf "There are already dev containers running:\n\n$()\n\n(hint:\n\n❯ just restart)\n\n"
+        exit
+    fi
+    just build
     docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
 
-# TODO implement for linux/ windows
+
+# Start the Docker daemon. TODO implement for linux/ windows
 start-docker:
     #!/usr/bin/env -S bash -euo pipefail
     if ( ! docker stats --no-stream 2>/dev/null ); then
@@ -101,27 +146,27 @@ start-docker:
         done
     fi
 
-status CONTAINERS="$(just get-dev-containers 2>/dev/null)":
+# Print information about the current development environment
+status:
     #!/usr/bin/env -S bash -euo pipefail
-    if [[ -z {{CONTAINERS}} ]]; then
+    containers=$(just get-dev-containers 2>/dev/null)
+    if [[ -z $containers ]]; then
         printf "\nNo development containers.\n\n";
     else
         printf "\nDevelopment Containers:\n\n"
-        format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
-        if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
-        docker ps --format=json 2>/dev/null | eval '$jq "$format"'; echo
+        just dev-containers; echo
     fi
-    printf "Docker Stats:\n\n"
+    printf "Docker Status:\n\n"
     if ( docker stats --no-stream 2>/dev/null ); then
-        containers=$(docker ps -a)
-        images=$(docker images)
-        printf "\nContainers:\n\n%s\n\nImages:\n\n%s\n\n" "$containers" "$images"
+        just docker-status
     else
         printf "Daemon stopped.\n\n"
     fi
 
+# Stop the given containers
 stop CONTAINERS="$(just get-dev-containers)":
     if [[ -n {{CONTAINERS}} ]]; then docker stop {{CONTAINERS}}; fi
 
+# TODO this
 test: build
     python -m pytest
