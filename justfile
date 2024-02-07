@@ -27,6 +27,20 @@ api HOST="localhost" PATH="/" TIMEOUT="5" RETRIES="3" DELAY="1" MAX_TIME="10" RE
 build:
     docker build -t {{image}} .
 
+build-requirements *FLAGS:
+    just require-dev {{FLAGS}}
+    just require-test {{FLAGS}}
+    just require-prod {{FLAGS}}
+
+build-requirements-dev *FLAGS:
+    pip-compile {{FLAGS}} --strip-extras -o requirements-dev.txt requirements-dev.in
+
+build-requirements-prod *FLAGS:
+    pip-compile {{FLAGS}} --strip-extras -o requirements.txt requirements.in
+
+build-requirements-test *FLAGS:
+    pip-compile {{FLAGS}} --strip-extras -o requirements-test.txt requirements-test.in
+
 clean: stop clean-containers clean-images
 clean-all: (stop "$(just get-all-containers)") (clean-containers "$(just get-all-containers)") clean-images
 
@@ -68,20 +82,6 @@ install-jq VERSION="$(utils/jq-latest.sh)" INSTALL_DIR="~/bin" TARGET="$(uname -
         printf "\njq installed successfully! But it doesn't appear to be on your \$PATH.\n"
         printf "You can add it to your path by running this:\n\n❯ export PATH={{INSTALL_DIR}}:\$PATH\n\n"
     fi
-
-require *FLAGS:
-    just require-dev {{FLAGS}}
-    just require-test {{FLAGS}}
-    just require-prod {{FLAGS}}
-
-require-dev *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements-dev.txt requirements-dev.in
-
-require-prod *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements.txt requirements.in
-
-require-test *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements-test.txt requirements-test.in
 
 restart: build && run
     nc -z localhost {{port}} >/dev/null 2>&1 && just stop || :
