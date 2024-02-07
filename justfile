@@ -41,8 +41,7 @@ clean-images:
     echo $(docker ps {{FLAGS}})
 
 install-jq VERSION="$(utils/jq-latest.sh)" INSTALL_DIR="~/bin" TARGET="$(uname -m)-$(uname -s | cut -d- -f1)":
-    #!/usr/bin/env -S bash -euo pipefail
-    set -x
+    #!/usr/bin/env -S bash -euxo pipefail
     case {{TARGET}} in
         arm64-Darwin)      asset=jq-macos-arm64;;
         x86_64-Darwin)     asset=jq-macos-amd64;;
