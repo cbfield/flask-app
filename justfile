@@ -28,9 +28,9 @@ build: start-docker
     docker build -t {{image}} .
 
 build-requirements *FLAGS:
-    just require-dev {{FLAGS}}
-    just require-test {{FLAGS}}
-    just require-prod {{FLAGS}}
+    just build-requirements-dev {{FLAGS}}
+    just build-requirements-test {{FLAGS}}
+    just build-requirements-prod {{FLAGS}}
 
 build-requirements-dev *FLAGS:
     pip-compile {{FLAGS}} --strip-extras -o requirements-dev.txt requirements-dev.in
