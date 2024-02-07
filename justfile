@@ -88,7 +88,6 @@ install-jq VERSION="" INSTALL_DIR="~/bin" TARGET="":
         releases=$(curl -L --no-progress-meter "$headers" https://api.github.com/repos/jqlang/jq/releases)
         version=$(echo "$releases" | python3 -c 'import sys, json; print(json.load(sys.stdin)[0]["tag_name"].split("-")[-1])')
     fi
-
     platform=$(uname -m)-$(uname -s | cut -d- -f1)
     case "$platform" in
         arm64-Darwin)       asset=jq-macos-arm64;;
