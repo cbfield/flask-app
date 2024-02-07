@@ -84,9 +84,11 @@ install-jq VERSION="" INSTALL_DIR="~/bin" TARGET="":
     #!/usr/bin/env -S bash -euo pipefail
     version="{{VERSION}}"
     if [[ -z "$version" ]]; then
+        echo "Looking up latest version..."
         headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28"'
         releases=$(curl -L --no-progress-meter "$headers" https://api.github.com/repos/jqlang/jq/releases)
         version=$(echo "$releases" | python3 -c 'import sys, json; print(json.load(sys.stdin)[0]["tag_name"].split("-")[-1])')
+        printf "Found %s\n" "$version"
     fi
     platform=$(uname -m)-$(uname -s | cut -d- -f1)
     case "$platform" in
