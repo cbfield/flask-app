@@ -1,13 +1,17 @@
 #!/usr/bin/env just --justfile
 
-@default:
-    just --list
-    printf "\nStatus:\n"
-    just status
+# Variables
 
 image := "cbfield/flask-app:latest"
 port := "5001"
 log_level := "DEBUG"
+
+# Recipes
+
+@default:
+    just --list
+    printf "\nStatus:\n"
+    just status
 
 api HOST="localhost" PATH="/" TIMEOUT="5" RETRIES="3" DELAY="1" MAX_TIME="10" RETRY_MAX_TIME="40":
     curl \
@@ -24,21 +28,22 @@ build:
     docker build -t {{image}} .
 
 clean: stop clean-containers clean-images
-clean-all: (stop "$(just get-all)") (clean-containers "$(just get-all)") clean-images
+clean-all: (stop "$(just get-all-containers)") (clean-containers "$(just get-all-containers)") clean-images
 
-clean-containers IDS="$(docker ps -aq)":
-    if [[ -n "{{IDS}}" ]]; then \
-        docker rm -vf {{IDS}}; \
+clean-containers CONTAINERS="$(docker ps -aq)":
+    #!/usr/bin/env -S bash -euxo pipefail
+    if [[ -n "{{CONTAINERS}}" ]]; then
+        docker rm -vf {{CONTAINERS}}
     fi
 
 clean-images:
     docker image prune --all --force
 
-@get +FLAGS="-q":
-    echo $(docker ps {{FLAGS}} --filter ancestor={{image}})
-
-@get-all +FLAGS="-q":
+@get-all-containers +FLAGS="-q":
     echo $(docker ps {{FLAGS}})
+
+@get-dev-containers +FLAGS="-q":
+    echo $(docker ps {{FLAGS}} --filter ancestor={{image}})
 
 install-jq VERSION="$(utils/jq-latest.sh)" INSTALL_DIR="~/bin" TARGET="$(uname -m)-$(uname -s | cut -d- -f1)":
     #!/usr/bin/env -S bash -euxo pipefail
@@ -84,7 +89,7 @@ restart: build && run
 run: build
     docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
 
-status CONTAINERS="$(just get)":
+status CONTAINERS="$(just get-dev-containers)":
     #!/usr/bin/env -S bash -euo pipefail
     if [[ -z {{CONTAINERS}} ]]; then
         printf "\nNo development containers.\n\n";
@@ -97,9 +102,9 @@ status CONTAINERS="$(just get)":
             docker ps --format=json | jq "$format"; echo
         fi
     fi
-    printf "$(docker ps -a)\n\n$(docker images)\n\n"
+    printf "Containers:\n\n$(docker ps -a)\n\nImages:\n\n$(docker images)\n\n"
 
-stop CONTAINERS="$(just get)":
+stop CONTAINERS="$(just get-dev-containers)":
     if [[ -n {{CONTAINERS}} ]]; then docker stop {{CONTAINERS}}; fi
 
 test: build
