@@ -13,7 +13,7 @@ log_level := "DEBUG"
     printf "\nStatus:\n"
     just status
 
-api HOST="localhost" PATH="/":
+api HOST="localhost" PATH="/api/v1/":
     curl \
         --connect-timeout 5 \
         --max-time 10 \
@@ -22,7 +22,7 @@ api HOST="localhost" PATH="/":
         --retry-max-time 30 \
         --retry-connrefused \
         --no-progress-meter \
-        http://{{HOST}}:{{port}}/api/v1{{PATH}}
+        http://{{HOST}}:{{port}}{{PATH}}
 
 build: start-docker
     docker build -t {{image}} .
@@ -135,13 +135,20 @@ run:
     just build
     docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
 
-
 # Start the Docker daemon. TODO implement for linux/ windows
 start-docker:
     #!/usr/bin/env -S bash -euo pipefail
     if ( ! docker stats --no-stream 2>/dev/null ); then
         echo "Starting the Docker daemon..."
-        open /Applications/Docker.app
+        if [[ {{os()}} == "macos" ]]; then
+            open /Applications/Docker.app
+        else if command -v systemctl >/dev/null; then
+            sudo systemctl start docker
+        else
+            echo "Unable to start the Docker daemon." >&2
+            exit 1
+        fi
+        fi
         while ( ! docker stats --no-stream 2>/dev/null ); do
             sleep 1
         done
