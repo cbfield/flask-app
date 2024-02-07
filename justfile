@@ -129,11 +129,13 @@ _get-gh-release-asset-id ASSET:
         sys.exit()
     print(next((a["id"] for a in d["assets"] if a["name"]=="{{ASSET}}"),""),end="")
 
+# Get a Github release (json)
 get-gh-release OWNER REPO TAG:
     #!/usr/bin/env -S bash -euo pipefail
     headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
     curl "$headers" -L --no-progress-meter https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
 
+# Download a Github release binary asset
 get-gh-release-binary OWNER REPO TAG ASSET DEST:
     #!/usr/bin/env -S bash -euo pipefail
     printf "\nRetrieving Release Binary...\n\nOWNER:\t\t%s\nREPO:\t\t%s\nRELEASE TAG:\t%s\nTARGET:\t\t%s\nDESTINATION:\t%s\n\n" {{OWNER}} {{REPO}} {{TAG}} {{ASSET}} {{DEST}}
@@ -146,6 +148,7 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
       https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/assets/$asset_id
     chmod +x "{{DEST}}"
 
+# Get the latest release for a given Github repo
 get-latest-gh-release OWNER REPO:
     #!/usr/bin/env -S bash -euo pipefail
     headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
@@ -219,7 +222,7 @@ run:
     just build
     docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
 
-# Start the Docker daemon. TODO implement for linux/ windows
+# Start the Docker daemon
 start-docker:
     #!/usr/bin/env -S bash -euo pipefail
     if ( ! docker stats --no-stream 2>/dev/null ); then
