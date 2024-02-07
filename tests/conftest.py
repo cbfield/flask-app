@@ -1,16 +1,11 @@
-from importlib import import_module
-from pathlib import Path
-from sys import path
-
 from pytest import fixture
+from importlib import import_module
 
-path.append(str(Path(__file__).parent.parent))
-src = import_module("src", package="src")
-
+from src import app as flaskapp
 
 @fixture()
 def app():
-    yield src.app
+    yield flaskapp
 
 
 @fixture()
