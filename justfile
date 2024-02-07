@@ -79,7 +79,7 @@ docker-status:
 @get-dev-images:
     echo $(docker images -q)
 
-# Install jq command-line tool via pre-built binary from the Github API (latest version by default)
+# Install jq via pre-built binary from the Github API (latest version by default)
 install-jq VERSION="" INSTALL_DIR="~/bin" TARGET="":
     #!/usr/bin/env -S bash -euo pipefail
     version="{{VERSION}}"
