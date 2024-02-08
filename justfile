@@ -1,7 +1,6 @@
 #!/usr/bin/env just --justfile
 
 # TODO
-# install aws
 # install netcat
 # configure docker netcat fallback
 # test
@@ -167,6 +166,25 @@ _handle-gh-api-errors:
         sys.exit()
     print(json.dumps(d))
 
+# Install the latest version of the AWS CLI
+install-aws:
+    #!/usr/bin/env -S bash -euo pipefail
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        trap 'rm -rf -- "awscliv2.zip"' EXIT
+        unzip awscliv2.zip
+        sudo ./aws/install
+        trap 'rm -rf -- "./aws"' EXIT
+    elif [[ "$(uname -s)" == "Darwin" ]]; then
+        curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+        trap 'rm -rf -- "AWSCLIV2.pkg"' EXIT
+        sudo installer -pkg AWSCLIV2.pkg -target /
+    elif [[ "$(uname -s)" == "MINGW64_NT" ]] || [[ "$(uname -s)" == "Windows_NT" ]]; then
+        msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
+    else
+        echo "Unable to determine proper install method. Cancelling" >&2; exit 1
+    fi
+
 # Install jq via pre-built binary from the Github API
 install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
     #!/usr/bin/env -S bash -euo pipefail
@@ -232,8 +250,7 @@ start-docker:
         else if command -v systemctl >/dev/null; then
             sudo systemctl start docker
         else
-            echo "Unable to start the Docker daemon." >&2
-            exit 1
+            echo "Unable to start the Docker daemon." >&2; exit 1
         fi
         fi
         while ( ! docker stats --no-stream 2>/dev/null ); do
