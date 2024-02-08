@@ -1,7 +1,6 @@
 #!/usr/bin/env just --justfile
 
 # TODO
-# log into aws codeartifact
 # test
 # lint
 # deploy
@@ -193,21 +192,26 @@ _handle-gh-api-errors:
 install-aws:
     #!/usr/bin/env -S bash -euo pipefail
     echo "Installing the AWS Command Line Interface..."
-    if [[ "{{os()}}" == "linux" ]]; then
-        curl --no-progress-meter "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-        trap 'rm -rf -- "awscliv2.zip"' EXIT
-        unzip awscliv2.zip
-        sudo ./aws/install
-        trap 'rm -rf -- "./aws"' EXIT
-    elif [[ "{{os()}}" == "macos" ]]; then
-        curl --no-progress-meter "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
-        trap 'rm -rf -- "AWSCLIV2.pkg"' EXIT
-        sudo installer -pkg AWSCLIV2.pkg -target /
-    elif [[ "{{os()}}" == "windows" ]]; then
-        msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
-    else
-        echo "Unable to determine proper install method. Cancelling" >&2; exit 1
-    fi
+    case "{{os()}}" in
+        linux)
+            curl --no-progress-meter "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            trap 'rm -rf -- "awscliv2.zip"' EXIT
+            unzip awscliv2.zip
+            sudo ./aws/install
+            trap 'rm -rf -- "./aws"' EXIT
+        ;;
+        macos)
+            curl --no-progress-meter "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+            trap 'rm -rf -- "AWSCLIV2.pkg"' EXIT
+            sudo installer -pkg AWSCLIV2.pkg -target /
+        ;;
+        windows)
+            msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
+        ;;
+        *)
+            echo "Unable to determine proper install method. Cancelling" >&2; exit 1
+        ;;
+    esac
 
 # Install jq via pre-built binary from the Github API
 install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
