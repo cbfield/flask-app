@@ -93,13 +93,6 @@ clean-images IMAGES="$(just get-dev-images)":
         done
     fi
 
-# Pretty-print development container information
-dev-containers:
-    #!/usr/bin/env -S bash -euo pipefail
-    format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
-    if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
-    docker ps --filter name="{{name}}*" --format=json 2>/dev/null | eval '$jq "$format"'
-
 # Pretty-print Docker status information
 docker-status:
     #!/usr/bin/env -S bash -euo pipefail
@@ -242,6 +235,13 @@ _is-image-used IMAGE:
         fi
     done
 
+# Pretty-print development container information
+pretty-dev-containers:
+    #!/usr/bin/env -S bash -euo pipefail
+    format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
+    if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
+    docker ps --filter name="{{name}}*" --format=json 2>/dev/null | eval '$jq "$format"'
+
 # Build and run the app
 run PORT="" NAME="": build
     #!/usr/bin/env -S bash -euo pipefail
@@ -281,7 +281,7 @@ status:
         printf "\nNo development containers.\n\n";
     else
         printf "\nDevelopment Containers:\n\n"
-        just dev-containers; echo
+        just pretty-dev-containers; echo
     fi
     printf "Docker Status:\n\n"
     if ( docker stats --no-stream 2>/dev/null ); then
