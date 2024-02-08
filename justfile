@@ -1,6 +1,7 @@
 #!/usr/bin/env just --justfile
 
 # TODO
+# log into aws codeartifact
 # test
 # lint
 # deploy
@@ -12,6 +13,10 @@ image := "cbfield/flask-app:latest"
 port := "5001"
 log_level := "DEBUG"
 gh_token := `cat ~/.secret/gh_token`
+
+aws_codeartifact_domain := ""
+aws_codeartifact_domain_owner := ""
+aws_codeartifact_repository := ""
 
 # Recipes
 
@@ -32,6 +37,23 @@ api PATH="/api/v1/":
         --retry-connrefused \
         --no-progress-meter \
         http://localhost:{{port}}{{PATH}}
+
+# Log into AWS SSO and begin a session with AWS CodeArtifact
+aws-login: _requires-aws
+    #!/usr/bin/env -S bash -euxo pipefail
+    if [[ -z $(aws sts get-caller-identity 2>/dev/null) ]]; then
+        aws sso login;
+    fi
+    if [[ -z "{{aws_codeartifact_domain}}" ]] && [[ -z "{{aws_codeartifact_repository}}" ]]; then
+        exit
+    fi
+    repo_flags="--domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --repository {{aws_codeartifact_repository}}"
+    if command -v pip >/dev/null; then
+        aws codeartifact login --tool pip $repo_flags
+    fi
+    if command -v npm >/dev/null; then
+        aws codeartifact login --tool npm $repo_flags
+    fi
 
 # Build the app container with Docker
 build: start-docker
@@ -170,6 +192,7 @@ _handle-gh-api-errors:
 # Install the latest version of the AWS CLI
 install-aws:
     #!/usr/bin/env -S bash -euo pipefail
+    echo "Installing the AWS Command Line Interface..."
     if [[ "{{os()}}" == "linux" ]]; then
         curl --no-progress-meter "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
         trap 'rm -rf -- "awscliv2.zip"' EXIT
@@ -241,6 +264,14 @@ pretty-dev-containers:
     format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
     if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
     docker ps --filter name="{{name}}*" --format=json 2>/dev/null | eval '$jq "$format"'
+
+# (AWS API util) Exit with feedback if the AWS CLI isn't installed
+_requires-aws:
+    #!/usr/bin/env -S bash -euo pipefail
+    if ! command -v aws >/dev/null; then
+        printf "You need the AWS Command Line Interface to run this command.\n\n❯ just install-aws\n\n" >&2
+        exit 1
+    fi
 
 # Build and run the app
 run PORT="" NAME="": build
