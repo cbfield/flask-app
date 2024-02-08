@@ -1,8 +1,6 @@
 #!/usr/bin/env just --justfile
 
 # TODO
-# install netcat
-# configure docker netcat fallback
 # test
 # lint
 # deploy
@@ -170,13 +168,13 @@ _handle-gh-api-errors:
 install-aws:
     #!/usr/bin/env -S bash -euo pipefail
     if [[ "{{os()}}" == "linux" ]]; then
-        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        curl --no-progress-meter "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
         trap 'rm -rf -- "awscliv2.zip"' EXIT
         unzip awscliv2.zip
         sudo ./aws/install
         trap 'rm -rf -- "./aws"' EXIT
     elif [[ "{{os()}}" == "macos" ]]; then
-        curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+        curl --no-progress-meter "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
         trap 'rm -rf -- "AWSCLIV2.pkg"' EXIT
         sudo installer -pkg AWSCLIV2.pkg -target /
     elif [[ "{{os()}}" == "windows" ]]; then
@@ -227,7 +225,7 @@ install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
 
 # Build and run the app, restarting it if already running
 restart: build
-    nc -z localhost {{port}} >/dev/null 2>&1 && just stop || :
+    if [[ -n "$(just get-dev-containers)" ]]; then just stop; fi
     docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
 
 # Build and run the app
