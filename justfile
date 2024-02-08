@@ -169,17 +169,17 @@ _handle-gh-api-errors:
 # Install the latest version of the AWS CLI
 install-aws:
     #!/usr/bin/env -S bash -euo pipefail
-    if [[ "$(uname -s)" == "Linux" ]]; then
+    if [[ "{{os()}}" == "linux" ]]; then
         curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
         trap 'rm -rf -- "awscliv2.zip"' EXIT
         unzip awscliv2.zip
         sudo ./aws/install
         trap 'rm -rf -- "./aws"' EXIT
-    elif [[ "$(uname -s)" == "Darwin" ]]; then
+    elif [[ "{{os()}}" == "macos" ]]; then
         curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
         trap 'rm -rf -- "AWSCLIV2.pkg"' EXIT
         sudo installer -pkg AWSCLIV2.pkg -target /
-    elif [[ "$(uname -s)" == "MINGW64_NT" ]] || [[ "$(uname -s)" == "Windows_NT" ]]; then
+    elif [[ "{{os()}}" == "windows" ]]; then
         msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
     else
         echo "Unable to determine proper install method. Cancelling" >&2; exit 1
