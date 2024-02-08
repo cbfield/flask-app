@@ -7,6 +7,7 @@
 
 # Variables
 
+name := "flask-app"
 image := "cbfield/flask-app:latest"
 port := "5001"
 log_level := "DEBUG"
@@ -62,13 +63,9 @@ clean-all: stop-all-containers clean-all-containers clean-all-images
 
 # Remove all containers
 clean-all-containers:
-    #!/usr/bin/env -S bash -euo pipefail
+    #!/usr/bin/env -S bash -euxo pipefail
     containers=$(docker ps -aq)
-    if [[ -n "$containers" ]]; then
-        docker rm -vf "$containers"
-    else
-        echo "No containers running."
-    fi
+    echo -n "$containers" | grep -q . && docker rm -vf "$containers" || :
 
 # Remove all images
 clean-all-images:
@@ -76,19 +73,32 @@ clean-all-images:
 
 # Remove containers by ID
 clean-containers CONTAINERS="$(just get-dev-containers)":
-    docker rm -vf "{{CONTAINERS}}"
+    #!/usr/bin/env -S bash -euxo pipefail
+    exited=$(docker ps -q -f "status=exited")
+    echo -n "$exited" | grep -q . && docker rm -vf "$exited" || :
+    containers="{{CONTAINERS}}"
+    echo -n "$containers" | grep -q . && docker rm -vf "$containers" || :
 
 # Remove images by ID
 clean-images IMAGES="$(just get-dev-images)":
-    docker rmi $(docker images -f "dangling=true" -q)
-    docker rmi "{{IMAGES}}"
+    #!/usr/bin/env -S bash -euxo pipefail
+    dangling=$(docker images -f "dangling=true" -q)
+    echo -n "$dangling" | grep -q . && docker rmi -f "$dangling" || :
+    images="{{IMAGES}}"
+    if echo -n "$images" | grep -q . ; then 
+        for image in $images; do
+            if [[ -z $(just _is-image-used "$image") ]]; then
+                docker rmi -f "$image"
+            fi
+        done
+    fi
 
 # Pretty-print development container information
 dev-containers:
     #!/usr/bin/env -S bash -euo pipefail
     format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
     if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
-    docker ps --filter ancestor={{image}} --format=json 2>/dev/null | eval '$jq "$format"'
+    docker ps --filter name="{{name}}*" --format=json 2>/dev/null | eval '$jq "$format"'
 
 # Pretty-print Docker status information
 docker-status:
@@ -99,7 +109,7 @@ docker-status:
 
 # List development container IDs
 @get-dev-containers:
-    echo $(docker ps -q --filter ancestor={{image}})
+    echo $(docker ps -q --filter name="{{name}}*")
 
 # List development image IDs
 @get-dev-images:
@@ -223,20 +233,27 @@ install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
         printf "You can add it to your path by running this:\n\n❯ export PATH={{INSTALL_DIR}}:\$PATH\n\n"
     fi
 
-# Build and run the app, restarting it if already running
-restart: build
-    if [[ -n "$(just get-dev-containers)" ]]; then just stop; fi
-    docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
+# (Docker util) Check if a given image is being used by any containers
+_is-image-used IMAGE:
+    #!/usr/bin/env -S bash -euo pipefail
+    for container in $(docker ps -aq); do
+        if docker ps -q --filter "ancestor={{IMAGE}}" | grep -q .; then
+            echo -n 0; exit
+        fi
+    done
 
 # Build and run the app
-run:
+run PORT="" NAME="": build
     #!/usr/bin/env -S bash -euo pipefail
-    if [[ -n $(just get-dev-containers) ]]; then
-        printf "There are already dev containers running:\n\n$()\n\n(hint:\n\n❯ just restart)\n\n"
-        exit
+    port="{{PORT}}"
+    if [[ -z "$port" ]]; then 
+        port="{{port}}"
     fi
-    just build
-    docker run -d --restart=always -p {{port}}:5000 -e LOG_LEVEL={{log_level}} {{image}}
+    name="{{NAME}}"
+    if [[ -z "$name" ]]; then 
+        name="flask-app-$(head -c 8 <<< `uuidgen`)"
+    fi
+    docker run --rm -d --name="$name" -p "$port":5000 -e LOG_LEVEL={{log_level}} {{image}}
 
 # Start the Docker daemon
 start-docker:
@@ -275,15 +292,13 @@ status:
 
 # Stop containers by ID
 stop CONTAINERS="$(just get-dev-containers)":
-    if [[ -n "{{CONTAINERS}}" ]]; then docker stop {{CONTAINERS}}; fi
+    #!/usr/bin/env -S bash -euxo pipefail
+    containers="{{CONTAINERS}}"
+    echo -n "$containers" | grep -q . && docker stop "$containers" || :
 
 alias stop-all := stop-all-containers
 # Stop all containers
 stop-all-containers:
-    #!/usr/bin/env -S bash -euo pipefail
+    #!/usr/bin/env -S bash -euxo pipefail
     containers=$(docker ps -aq)
-    if [[ -n "$containers" ]]; then
-        docker stop "$containers"
-    else
-        echo "No containers running."
-    fi
+    echo -n "$containers" | grep -q . && docker stop "$containers" || :
