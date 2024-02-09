@@ -1,9 +1,6 @@
 #!/usr/bin/env just --justfile
 
 # TODO
-# test (pytest)
-# lint (mypy pylint flake8)
-# format (isort autopop8)
 # publish-ghcr
 # publish-gar
 
@@ -72,9 +69,11 @@ build: start-docker
 
 # Generate requirements*.txt from requirements*.in using pip-tools
 build-reqs *FLAGS:
-    just build-reqs-dev {{FLAGS}}
-    just build-reqs-test {{FLAGS}}
     just build-reqs-deploy {{FLAGS}}
+    just build-reqs-dev {{FLAGS}}
+    just build-reqs-fmt {{FLAGS}}
+    just build-reqs-lint {{FLAGS}}
+    just build-reqs-test {{FLAGS}}
 
 # Generate requirements.txt from requirements.in using pip-tools
 build-reqs-deploy *FLAGS:
@@ -83,6 +82,14 @@ build-reqs-deploy *FLAGS:
 # Generate requirements-dev.txt from requirements-dev.in using pip-tools
 build-reqs-dev *FLAGS:
     pip-compile {{FLAGS}} --strip-extras -o requirements-dev.txt requirements-dev.in
+
+# Generate requirements-dev.txt from requirements-dev.in using pip-tools
+build-reqs-fmt *FLAGS:
+    pip-compile {{FLAGS}} --strip-extras -o requirements-fmt.txt requirements-fmt.in
+
+# Generate requirements-dev.txt from requirements-dev.in using pip-tools
+build-reqs-lint *FLAGS:
+    pip-compile {{FLAGS}} --strip-extras -o requirements-lint.txt requirements-lint.in
 
 # Generate requirements-test.txt from requirements-test.in using pip-tools
 build-reqs-test *FLAGS:
@@ -132,6 +139,18 @@ docker-status:
     containers=$(docker ps -a)
     images=$(docker images)
     printf "\nContainers:\n\n%s\n\nImages:\n\n%s\n\n" "$containers" "$images"
+
+# Format src/ (black & isort)
+fmt:
+    #!/usr/bin/env -S bash -euxo pipefail
+    if [[ ! -x {{venv}}-fmt/bin/activate ]]; then
+        python3 -m venv {{venv}}-fmt
+    fi
+    source {{venv}}-fmt/bin/activate
+    python3 -m pip install --upgrade pip
+    python3 -m pip install -r requirements-fmt.txt
+    isort {{justfile_directory()}}/src
+    black {{justfile_directory()}}/src
 
 # List development container IDs
 @get-dev-containers:
@@ -284,6 +303,24 @@ _is-image-used IMAGE:
         fi
     done
 
+# Lint src/ (pylint & flake8)
+lint:
+    #!/usr/bin/env -S bash -euxo pipefail
+    if [[ ! -x {{venv}}-lint/bin/activate ]]; then
+        python3 -m venv {{venv}}-lint
+    fi
+    source {{venv}}-lint/bin/activate
+    python3 -m pip install --upgrade pip
+    python3 -m pip install -r requirements-lint.txt
+    status=0
+    if ! pylint -v {{justfile_directory()}}/src; then
+        status=1
+    fi
+    if ! flake8 -v {{justfile_directory()}}/src; then
+        status=1
+    fi
+    exit $status
+
 # Pretty-print development container information
 pretty-dev-containers:
     #!/usr/bin/env -S bash -euo pipefail
@@ -382,12 +419,13 @@ stop-all-containers:
     containers=$(docker ps -aq)
     echo -n "$containers" | grep -q . && docker stop "$containers" || :
 
+# Test src/ (Pytest)
 test:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{venv}}/bin/activate ]]; then
-        python3 -m venv {{venv}}
+    if [[ ! -x {{venv}}-test/bin/activate ]]; then
+        python3 -m venv {{venv}}-test
     fi
-    source ./venv/bin/activate
+    source {{venv}}-test/bin/activate
     python3 -m pip install --upgrade pip
     python3 -m pip install -r requirements-test.txt
     pytest --verbose
