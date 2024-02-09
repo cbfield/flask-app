@@ -1,15 +1,18 @@
 #!/usr/bin/env just --justfile
 
 # TODO
-# test
-# lint
-# publish to Github Container Registry & Google Artifact Registry
+# test (pytest)
+# lint (mypy pylint flake8)
+# format (isort autopop8)
+# publish-ghcr
+# publish-gar
 
 # -- Variables --
 name := "flask-app"
 dockerhub := "cbfield"
-port := "5001"
 log_level := "DEBUG"
+localhost_port := "5001"
+venv := justfile_directory() + "/.venv"
 gh_token := `cat ~/.secret/gh_token`
 # -- Variables --
 
@@ -41,7 +44,7 @@ api PATH="/api/v1/":
         --retry-max-time 30 \
         --retry-connrefused \
         --no-progress-meter \
-        http://localhost:{{port}}{{PATH}}
+        http://localhost:{{localhost_port}}{{PATH}}
 
 # (AWS API) Start a session with AWS CodeArtifact
 aws-codeartifact-login: _requires-aws
@@ -321,9 +324,9 @@ _requires-aws:
 # Build and run the app
 run PORT="" NAME="": build
     #!/usr/bin/env -S bash -euo pipefail
-    port="{{PORT}}"
+    port="{{localhost_port}}"
     if [[ -z "$port" ]]; then 
-        port="{{port}}"
+        port="{{localhost_port}}"
     fi
     name="{{NAME}}"
     if [[ -z "$name" ]]; then 
@@ -378,3 +381,13 @@ stop-all-containers:
     #!/usr/bin/env -S bash -euxo pipefail
     containers=$(docker ps -aq)
     echo -n "$containers" | grep -q . && docker stop "$containers" || :
+
+test:
+    #!/usr/bin/env -S bash -euxo pipefail
+    if [[ ! -x {{venv}}/bin/activate ]]; then
+        python3 -m venv {{venv}}
+    fi
+    source ./venv/bin/activate
+    python3 -m pip install --upgrade pip
+    python3 -m pip install -r requirements-test.txt
+    pytest --verbose
