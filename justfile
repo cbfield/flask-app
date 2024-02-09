@@ -3,21 +3,27 @@
 # TODO
 # test
 # lint
-# deploy
+# publish to Github Container Registry & Google Artifact Registry
 
-# Variables
-
+# -- Variables --
 name := "flask-app"
-image := "cbfield/flask-app:latest"
+dockerhub := "cbfield"
 port := "5001"
 log_level := "DEBUG"
 gh_token := `cat ~/.secret/gh_token`
+# -- Variables --
 
+# -- AWS Variables --
 aws_codeartifact_domain := ""
 aws_codeartifact_domain_owner := ""
 aws_codeartifact_repository := ""
 
-# Recipes
+aws_default_region := "us-west-2"
+aws_ecr_account_id := ""
+aws_ecr_repository := "flask-app"
+# -- AWS Variables --
+
+# ------------ Recipes ------------
 
 # Show help and status info
 @default:
@@ -37,12 +43,9 @@ api PATH="/api/v1/":
         --no-progress-meter \
         http://localhost:{{port}}{{PATH}}
 
-# Log into AWS SSO and begin a session with AWS CodeArtifact
-aws-login: _requires-aws
+# (AWS API) Start a session with AWS CodeArtifact
+aws-codeartifact-login: _requires-aws
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ -z $(aws sts get-caller-identity 2>/dev/null) ]]; then
-        aws sso login;
-    fi
     if [[ -z "{{aws_codeartifact_domain}}" ]] && [[ -z "{{aws_codeartifact_repository}}" ]]; then
         exit
     fi
@@ -54,9 +57,15 @@ aws-login: _requires-aws
         aws codeartifact login --tool npm $repo_flags
     fi
 
+# (AWS API) Start a session with AWS Elastic Container Registry
+aws-ecr-login ACCOUNT=aws_ecr_account_id REGION=aws_default_region: _requires-aws
+    #!/usr/bin/env -S bash -euxo pipefail
+    address=$(just _get-aws-ecr-address "{{ACCOUNT}}" "{{REGION}}")
+    aws ecr get-login-password --region "{{REGION}}" | docker login --username AWS --password-stdin "$address"
+
 # Build the app container with Docker
 build: start-docker
-    docker build -t {{image}} .
+    docker build -t {{name}} .
 
 # Generate requirements*.txt from requirements*.in using pip-tools
 build-reqs *FLAGS:
@@ -128,6 +137,16 @@ docker-status:
 # List development image IDs
 @get-dev-images:
     echo $(docker images -q)
+
+# (AWS API util) Get AWS Elastic Container Registry address for the current AWS account
+_get-aws-ecr-address ACCOUNT=aws_ecr_account_id REGION=aws_default_region:
+    #!/usr/bin/env -S bash -euxo pipefail
+    if [[ -n "{{ACCOUNT}}" ]]; then
+        echo -n "{{ACCOUNT}}".dkr.ecr.{{REGION}}.amazonaws.com
+    else
+        account=$(aws sts get-caller-identity | python3 -c "import sys, json; print(json.load(sys.stdin)['Account'])")
+        echo -n "$account".dkr.ecr.{{REGION}}.amazonaws.com
+    fi
 
 # (JSON util) Return the first item in a JSON list. Return nothing if invalid JSON or type != list.
 _get-first-item:
@@ -269,12 +288,34 @@ pretty-dev-containers:
     if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
     docker ps --filter name="{{name}}*" --format=json 2>/dev/null | eval '$jq "$format"'
 
-# (AWS API util) Exit with feedback if the AWS CLI isn't installed
+# Publish container image to AWS Elastic Container Registry
+publish-aws-ecr *TAGS="": _requires-aws
+    #!/usr/bin/env -S bash -euxo pipefail
+    ecr=$(just _get-aws-ecr-address)
+    tags="-t $ecr/test:latest"
+    for tag in {{TAGS}}; do
+        tags+=" -t $ecr/test:$tag"
+    done
+    docker build --push $tags .
+
+# Publish container image to AWS Elastic Container Registry
+publish-dockerhub *TAGS="":
+    #!/usr/bin/env -S bash -euxo pipefail
+    tags="-t {{dockerhub}}/{{name}}:latest"
+    for tag in {{TAGS}}; do
+        tags+=" -t {{dockerhub}}/{{name}}:$tag"
+    done
+    docker build --push $tags .
+
+# (AWS API util) Ensure the user is logged into AWS if possible, or exit
 _requires-aws:
     #!/usr/bin/env -S bash -euo pipefail
     if ! command -v aws >/dev/null; then
         printf "You need the AWS Command Line Interface to run this command.\n\n❯ just install-aws\n\n" >&2
         exit 1
+    fi
+    if [[ -z $(aws sts get-caller-identity 2>/dev/null) ]]; then
+        aws sso login;
     fi
 
 # Build and run the app
@@ -288,7 +329,7 @@ run PORT="" NAME="": build
     if [[ -z "$name" ]]; then 
         name="flask-app-$(head -c 8 <<< `uuidgen`)"
     fi
-    docker run --rm -d --name="$name" -p "$port":5000 -e LOG_LEVEL={{log_level}} {{image}}
+    docker run --rm -d --name="$name" -p "$port":5000 -e LOG_LEVEL={{log_level}} {{name}}
 
 # Start the Docker daemon
 start-docker:
