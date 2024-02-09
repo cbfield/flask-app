@@ -77,23 +77,23 @@ build-reqs *FLAGS:
 
 # Generate requirements.txt from requirements.in using pip-tools
 build-reqs-deploy *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements.txt requirements.in
+    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements.txt requirements/requirements.in
 
 # Generate requirements-dev.txt from requirements-dev.in using pip-tools
 build-reqs-dev *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements-dev.txt requirements-dev.in
+    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements-dev.txt requirements/requirements-dev.in
 
 # Generate requirements-dev.txt from requirements-dev.in using pip-tools
 build-reqs-fmt *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements-fmt.txt requirements-fmt.in
+    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements-fmt.txt requirements/requirements-fmt.in
 
 # Generate requirements-dev.txt from requirements-dev.in using pip-tools
 build-reqs-lint *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements-lint.txt requirements-lint.in
+    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements-lint.txt requirements/requirements-lint.in
 
 # Generate requirements-test.txt from requirements-test.in using pip-tools
 build-reqs-test *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements-test.txt requirements-test.in
+    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements-test.txt requirements/requirements-test.in
 
 # Remove development containers and images
 clean: stop clean-containers clean-images
