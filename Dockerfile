@@ -7,7 +7,7 @@ RUN apk update && apk add gcc libc-dev python3-dev py3-pip
 RUN python3 -m venv --copies /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-ADD requirements.txt .
+ADD requirements/requirements.txt .
 RUN pip install -r requirements.txt
 
 FROM base AS runtime

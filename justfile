@@ -1,19 +1,26 @@
 #!/usr/bin/env just --justfile
 
 # TODO
-# publish-ghcr
-# publish-gar
+# .env file support for all variables
+# double check exposed vars for each recipe
 
 # -- Variables --
 name := "flask-app"
-dockerhub := "cbfield"
 log_level := "DEBUG"
 localhost_port := "5001"
 venv := justfile_directory() + "/.venv"
 gh_token := `cat ~/.secret/gh_token`
 # -- Variables --
 
-# -- AWS Variables --
+# -- Container Registry Variables --
+dockerhub_namespace := "cbfield"
+github_namespace := "cbfield"
+ghcr_token := `cat ~/.secret/ghcr_token`
+
+gcloud_region := "us-west1"
+gcloud_registry := "main"
+gcloud_project_id := "instant-contact-284406"
+
 aws_codeartifact_domain := ""
 aws_codeartifact_domain_owner := ""
 aws_codeartifact_repository := ""
@@ -21,7 +28,7 @@ aws_codeartifact_repository := ""
 aws_default_region := "us-west-2"
 aws_ecr_account_id := ""
 aws_ecr_repository := "flask-app"
-# -- AWS Variables --
+# -- Container Registry Variables --
 
 # ------------ Recipes ------------
 
@@ -127,7 +134,7 @@ clean-images IMAGES="$(just get-dev-images)":
     images="{{IMAGES}}"
     if echo -n "$images" | grep -q . ; then 
         for image in $images; do
-            if [[ -z $(just _is-image-used "$image") ]]; then
+            if [[ -z $(just _is-ancestor "$image") ]]; then
                 docker rmi -f "$image"
             fi
         done
@@ -148,7 +155,7 @@ fmt:
     fi
     source {{venv}}-fmt/bin/activate
     python3 -m pip install --upgrade pip
-    python3 -m pip install -r requirements-fmt.txt
+    python3 -m pip install -r requirements/requirements-fmt.txt
     isort {{justfile_directory()}}/src
     black {{justfile_directory()}}/src
 
@@ -231,7 +238,7 @@ _handle-gh-api-errors:
 
 # Install the latest version of the AWS CLI
 install-aws:
-    #!/usr/bin/env -S bash -euo pipefail
+    #!/usr/bin/env -S bash -euxo pipefail
     echo "Installing the AWS Command Line Interface..."
     case "{{os()}}" in
         linux)
@@ -254,9 +261,29 @@ install-aws:
         ;;
     esac
 
+# Install the GCloud Command Line Interface
+install-gcloud VERSION="463.0.0":
+    #!/usr/bin/env -S bash -euxo pipefail
+    echo "Installing the Google Cloud Command Line Interface..."
+    url="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads"
+    machine=$(uname -m | sed -e 's/arm64/arm/g')
+    distribution=$(uname -s | tr '[:upper:]' '[:lower:]')
+    curl -L --no-progress-meter \
+        "$url/google-cloud-cli-{{VERSION}}-$distribution-$machine.tar.gz" | tar -xzf - -C "$HOME"
+    "$HOME/google-cloud-sdk/install.sh" -q
+    gcloud_path="$HOME/google-cloud-sdk/path.$(basename $SHELL).inc"
+    completion="$HOME/google-cloud-sdk/completion.$(basename $SHELL).inc"
+    rcfile="$HOME/.$(basename $SHELL)rc"
+    if ! grep -q "$gcloud_path" "$HOME/.$(basename $SHELL)rc"; then
+        printf "\n# Google Cloud SDK PATH\nif [ -f %s ]; then . %s; fi\n\n" "$gcloud_path" "$gcloud_path" >> "$rcfile"
+    fi
+    if ! grep -q "$completion" "$HOME/.$(basename $SHELL)rc"; then
+        printf "\n# Google Cloud SDK Completion\nif [ -f %s ]; then . %s; fi\n\n" "$completion" "$completion" >> "$rcfile"
+    fi
+
 # Install jq via pre-built binary from the Github API
 install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
-    #!/usr/bin/env -S bash -euo pipefail
+    #!/usr/bin/env -S bash -euxo pipefail
     version="{{VERSION}}"
     if [[ "$version" == "latest" ]]; then
         echo "Looking up latest version..."
@@ -295,7 +322,7 @@ install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
     fi
 
 # (Docker util) Check if a given image is being used by any containers
-_is-image-used IMAGE:
+_is-ancestor IMAGE:
     #!/usr/bin/env -S bash -euo pipefail
     for container in $(docker ps -aq); do
         if docker ps -q --filter "ancestor={{IMAGE}}" | grep -q .; then
@@ -311,7 +338,7 @@ lint:
     fi
     source {{venv}}-lint/bin/activate
     python3 -m pip install --upgrade pip
-    python3 -m pip install -r requirements-lint.txt
+    python3 -m pip install -r requirements/requirements-lint.txt
     status=0
     if ! pylint -v {{justfile_directory()}}/src; then
         status=1
@@ -341,9 +368,28 @@ publish-aws-ecr *TAGS="": _requires-aws
 # Publish container image to AWS Elastic Container Registry
 publish-dockerhub *TAGS="":
     #!/usr/bin/env -S bash -euxo pipefail
-    tags="-t {{dockerhub}}/{{name}}:latest"
+    tags="-t {{dockerhub_namespace}}/{{name}}:latest"
     for tag in {{TAGS}}; do
-        tags+=" -t {{dockerhub}}/{{name}}:$tag"
+        tags+=" -t {{dockerhub_namespace}}/{{name}}:$tag"
+    done
+    docker build --push $tags .
+
+# Publish container image to Google Artifact Registry
+publish-gar *TAGS="": _requires-gcloud
+    #!/usr/bin/env -S bash -euxo pipefail
+    tags="-t {{gcloud_region}}-docker.pkg.dev/{{gcloud_project_id}}/{{gcloud_registry}}/{{name}}:latest"
+    for tag in {{TAGS}}; do
+        tags+=" -t {{gcloud_region}}-docker.pkg.dev/{{gcloud_project_id}}/{{gcloud_registry}}/{{name}}:$tag"
+    done
+    docker build --push $tags .
+
+# Publish container image to Github Container Registry
+publish-ghcr *TAGS="":
+    #!/usr/bin/env -S bash -euxo pipefail
+    docker login ghcr.io -u {{github_namespace}} -p {{ghcr_token}}
+    tags="-t ghcr.io/{{github_namespace}}/{{name}}:latest"
+    for tag in {{TAGS}}; do
+        tags+=" -t ghcr.io/{{github_namespace}}/{{name}}:$tag"
     done
     docker build --push $tags .
 
@@ -355,7 +401,18 @@ _requires-aws:
         exit 1
     fi
     if [[ -z $(aws sts get-caller-identity 2>/dev/null) ]]; then
-        aws sso login;
+        aws sso login
+    fi
+
+# (GCloud API util) Ensure the user is logged into GCloud if possible, or exit
+_requires-gcloud:
+    #!/usr/bin/env -S bash -euo pipefail
+    if ! command -v gcloud >/dev/null; then
+        printf "You need the Google Cloud Command Line Interface to run this command.\n\n❯ just install-gcloud\n\n" >&2
+        exit 1
+    fi
+    if [[ -z $(gcloud auth list --filter=status:ACTIVE --format="value(account)") ]]; then
+        gcloud auth login
     fi
 
 # Build and run the app
@@ -427,5 +484,5 @@ test:
     fi
     source {{venv}}-test/bin/activate
     python3 -m pip install --upgrade pip
-    python3 -m pip install -r requirements-test.txt
+    python3 -m pip install -r requirements/requirements-test.txt
     pytest --verbose
