@@ -1,8 +1,5 @@
 #!/usr/bin/env just --justfile
 
-# TODO
-# double check exposed vars for each recipe
-
 # -- Settings --
 set dotenv-load
 # -- Settings --
