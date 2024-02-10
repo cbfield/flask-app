@@ -5,7 +5,9 @@ tests
 *.pyc
 *.pyo
 *.pyd
+*.env
 __pycache__
 *.egg-info
 .gitignore
 .pytest_cache
+requirements*.txt
