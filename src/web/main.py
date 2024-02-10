@@ -10,7 +10,7 @@ from flask import Blueprint, make_response, render_template, request
 web = Blueprint("web", __package__, template_folder="templates")
 log = getLogger(f"{__package__}-Web")
 if "LOG_LEVEL" in environ:
-    log.setLevel(getLevelName(environ.get("LOG_LEVEL")))
+    log.setLevel(getLevelName(environ.get("LOG_LEVEL")))  # type: ignore
 
 
 @web.route("/", methods=["GET"])

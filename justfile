@@ -1,33 +1,36 @@
 #!/usr/bin/env just --justfile
 
 # TODO
-# .env file support for all variables
 # double check exposed vars for each recipe
+# publish-aws-codeartifact
+
+# -- Settings --
+set dotenv-load
+# -- Settings --
 
 # -- Variables --
-name := "flask-app"
-log_level := "DEBUG"
-localhost_port := "5001"
-venv := justfile_directory() + "/.venv"
-gh_token := `cat ~/.secret/gh_token`
+name := "${APP_NAME:-flask-app}"
+log_level := "${APP_LOG_LEVEL:-INFO}"
+localhost_port := "${APP_PORT:-5001}"
+gh_token := `cat ${GH_TOKEN_FILE} || echo ""`
 # -- Variables --
 
 # -- Container Registry Variables --
-dockerhub_namespace := "cbfield"
-github_namespace := "cbfield"
-ghcr_token := `cat ~/.secret/ghcr_token`
+dockerhub_namespace := "${DOCKERHUB_NAMESPACE:-}"
+github_namespace := "${GITHUB_NAMESPACE:-}"
+ghcr_token := `cat ${GH_TOKEN_FILE:-~/.secret/ghcr_token} || echo -n ""`
 
-gcloud_region := "us-west1"
-gcloud_registry := "main"
-gcloud_project_id := "instant-contact-284406"
+gcloud_region := "${CLOUDSDK_COMPUTE_ZONE:-us-west1}"
+gcloud_registry := "${GCLOUD_GAR_REGISTRY:-main}"
+gcloud_project_id := "${CLOUDSDK_CORE_PROJECT:-}"
 
-aws_codeartifact_domain := ""
-aws_codeartifact_domain_owner := ""
-aws_codeartifact_repository := ""
+aws_codeartifact_domain := "${AWS_CODEARTIFACT_DOMAIN:-}"
+aws_codeartifact_domain_owner := "${AWS_CODEARTIFACT_DOMAIN_OWNER:-}"
+aws_codeartifact_repository := "${AWS_CODEARTIFACT_REPOSITORY:-}"
 
-aws_default_region := "us-west-2"
-aws_ecr_account_id := ""
-aws_ecr_repository := "flask-app"
+aws_default_region := "${AWS_DEFAULT_REGION:-us-west-2}"
+aws_ecr_account_id := "${AWS_ECR_ACCOUNT_ID:-}"
+aws_ecr_repository := "${AWS_ECR_REPOSITORY:-flask-app}"
 # -- Container Registry Variables --
 
 # ------------ Recipes ------------
@@ -150,10 +153,10 @@ docker-status:
 # Format src/ (black & isort)
 fmt:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{venv}}-fmt/bin/activate ]]; then
-        python3 -m venv {{venv}}-fmt
+    if [[ ! -x {{justfile_directory()}}/.venv-fmt/bin/activate ]]; then
+        python3 -m venv {{justfile_directory()}}/.venv-fmt
     fi
-    source {{venv}}-fmt/bin/activate
+    source {{justfile_directory()}}/.venv-fmt/bin/activate
     python3 -m pip install --upgrade pip
     python3 -m pip install -r requirements/requirements-fmt.txt
     isort {{justfile_directory()}}/src
@@ -333,14 +336,17 @@ _is-ancestor IMAGE:
 # Lint src/ (pylint & flake8)
 lint:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{venv}}-lint/bin/activate ]]; then
-        python3 -m venv {{venv}}-lint
+    if [[ ! -x {{justfile_directory()}}/.venv-lint/bin/activate ]]; then
+        python3 -m venv {{justfile_directory()}}/.venv-lint
     fi
-    source {{venv}}-lint/bin/activate
+    source {{justfile_directory()}}/.venv-lint/bin/activate
     python3 -m pip install --upgrade pip
     python3 -m pip install -r requirements/requirements-lint.txt
     status=0
     if ! pylint -v {{justfile_directory()}}/src; then
+        status=1
+    fi
+    if ! mypy {{justfile_directory()}}/src; then
         status=1
     fi
     if ! flake8 -v {{justfile_directory()}}/src; then
@@ -354,6 +360,9 @@ pretty-dev-containers:
     format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
     if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
     docker ps --filter name="{{name}}*" --format=json 2>/dev/null | eval '$jq "$format"'
+
+# Publish Python package to AWS CodeArtifact
+publish-aws-codeartifact: aws-codeartifact-login
 
 # Publish container image to AWS Elastic Container Registry
 publish-aws-ecr *TAGS="": _requires-aws
@@ -479,10 +488,29 @@ stop-all-containers:
 # Test src/ (Pytest)
 test:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{venv}}-test/bin/activate ]]; then
-        python3 -m venv {{venv}}-test
+    if [[ ! -x {{justfile_directory()}}/.venv-test/bin/activate ]]; then
+        python3 -m venv {{justfile_directory()}}/.venv-test
     fi
-    source {{venv}}-test/bin/activate
+    source {{justfile_directory()}}/.venv-test/bin/activate
     python3 -m pip install --upgrade pip
     python3 -m pip install -r requirements/requirements-test.txt
     pytest --verbose
+
+# Show values of justfile variables
+@vars:
+    echo name:\\t\\t\\t\\t{{name}}
+    echo log_level:\\t\\t\\t{{log_level}}
+    echo localhost_port:\\t\\t\\t{{localhost_port}}
+    echo gh_token:\\t\\t\\t{{gh_token}}
+    echo dockerhub_namespace:\\t\\t{{dockerhub_namespace}}
+    echo github_namespace:\\t\\t{{github_namespace}}
+    echo ghcr_token:\\t\\t\\t{{ghcr_token}}
+    echo gcloud_region:\\t\\t\\t{{gcloud_region}}
+    echo gcloud_registry:\\t\\t{{gcloud_registry}}
+    echo gcloud_project_id:\\t\\t{{gcloud_project_id}}
+    echo aws_codeartifact_domain:\\t{{aws_codeartifact_domain}}
+    echo aws_codeartifact_domain_owner:\\t{{aws_codeartifact_domain_owner}}
+    echo aws_codeartifact_repository:\\t{{aws_codeartifact_repository}}
+    echo aws_default_region:\\t\\t{{aws_default_region}}
+    echo aws_ecr_account_id:\\t\\t{{aws_ecr_account_id}}
+    echo aws_ecr_repository:\\t\\t{{aws_ecr_repository}}

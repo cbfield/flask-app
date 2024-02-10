@@ -5,17 +5,106 @@
 #    pip-compile --output-file=requirements/requirements-dev.txt --strip-extras requirements/requirements-dev.in
 #
 build==1.0.3
-    # via pip-tools
+    # via
+    #   pip-tools
+    #   poetry
+cachecontrol==0.13.1
+    # via
+    #   cachecontrol
+    #   poetry
+certifi==2024.2.2
+    # via requests
+cffi==1.16.0
+    # via xattr
+charset-normalizer==3.3.2
+    # via requests
+cleo==2.1.0
+    # via poetry
 click==8.1.7
     # via pip-tools
+crashtest==0.4.1
+    # via
+    #   cleo
+    #   poetry
+distlib==0.3.8
+    # via virtualenv
+dulwich==0.21.7
+    # via poetry
+fastjsonschema==2.19.1
+    # via poetry
+filelock==3.13.1
+    # via
+    #   cachecontrol
+    #   virtualenv
+idna==3.6
+    # via requests
+installer==0.7.0
+    # via poetry
+jaraco-classes==3.3.1
+    # via keyring
+keyring==24.3.0
+    # via poetry
+more-itertools==10.2.0
+    # via jaraco-classes
+msgpack==1.0.7
+    # via cachecontrol
 packaging==23.2
-    # via build
+    # via
+    #   build
+    #   poetry
+pexpect==4.9.0
+    # via poetry
 pip-tools==7.3.0
     # via -r requirements/requirements-dev.in
+pkginfo==1.9.6
+    # via poetry
+platformdirs==3.11.0
+    # via
+    #   poetry
+    #   virtualenv
+poetry==1.7.1
+    # via
+    #   -r requirements/requirements-dev.in
+    #   poetry-plugin-export
+poetry-core==1.8.1
+    # via
+    #   poetry
+    #   poetry-plugin-export
+poetry-plugin-export==1.6.0
+    # via poetry
+ptyprocess==0.7.0
+    # via pexpect
+pycparser==2.21
+    # via cffi
 pyproject-hooks==1.0.0
-    # via build
+    # via
+    #   build
+    #   poetry
+rapidfuzz==3.6.1
+    # via cleo
+requests==2.31.0
+    # via
+    #   cachecontrol
+    #   poetry
+    #   requests-toolbelt
+requests-toolbelt==1.0.0
+    # via poetry
+shellingham==1.5.4
+    # via poetry
+tomlkit==0.12.3
+    # via poetry
+trove-classifiers==2024.1.31
+    # via poetry
+urllib3==2.2.0
+    # via
+    #   dulwich
+    #   requests
+virtualenv==20.25.0
+    # via poetry
 wheel==0.42.0
     # via pip-tools
+xattr==0.10.1
+    # via poetry
 
 # The following packages are considered to be unsafe in a requirements file:
 # pip

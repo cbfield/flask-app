@@ -5,6 +5,7 @@ tests
 *.pyc
 *.pyo
 *.pyd
+*.env
 __pycache__
 *.egg-info
 .gitignore

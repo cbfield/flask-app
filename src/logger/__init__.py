@@ -9,7 +9,7 @@ RegexFilter        - Replace regex needles with string haystacks in log messages
 
 from datetime import datetime, timezone
 from json import dumps as json_dumps
-from logging import Filter, Formatter, LogRecord
+from logging import Filter, Formatter
 from re import sub
 
 
@@ -18,7 +18,7 @@ class JsonLinesFormatter(Formatter):
     Format Logs as JSON lines
     """
 
-    def format(self, record: LogRecord) -> str:
+    def format(self, record):
         msg = {
             "function": record.funcName,
             "level": record.levelname,
@@ -49,11 +49,11 @@ class RegexFilter(Filter):  # pylint: disable=too-few-public-methods
         substitute: str - string to insert in place of original
     """
 
-    def __init__(self, pattern: str | None = None, substitute: str | None = None):
+    def __init__(self, pattern, substitute):
         super().__init__()
         self.pattern = pattern
         self.substitute = substitute
 
-    def filter(self, record: LogRecord) -> bool:
+    def filter(self, record):
         record.msg = sub(self.pattern, self.substitute, record.msg)
         return True

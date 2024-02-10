@@ -10,7 +10,7 @@ from flask import Blueprint, make_response, request
 api = Blueprint("api", __package__)
 log = getLogger(f"{__package__}-API-v1")
 if "LOG_LEVEL" in environ:
-    log.setLevel(getLevelName(environ.get("LOG_LEVEL")))
+    log.setLevel(getLevelName(environ.get("LOG_LEVEL")))  # type: ignore
 
 
 @api.route("/", methods=["GET"])
