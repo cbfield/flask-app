@@ -24,10 +24,11 @@ Little preview:
 
 ### Starter .env
 
-You can leave this `.env` file at the root of the repository to configure the behavior of the `justfile`:
+You can leave a `.env` file at the root of the repository to configure the behavior of the `justfile`. Here's a starter:
 
 ```env
 APP_NAME=flask-app
+APP_LOG_LEVEL=DEBUG
 APP_PORT=5001
 AWS_CODEARTIFACT_DOMAIN=main
 AWS_CODEARTIFACT_DOMAIN_OWNER=000000000000
@@ -39,10 +40,9 @@ CLOUDSDK_COMPUTE_ZONE=us-west1
 CLOUDSDK_CORE_PROJECT=my-project
 DOCKERHUB_NAMESPACE=my-dockerhub-username
 GCLOUD_GAR_REGISTRY=main
-GH_TOKEN_FILE=/Users/chris/.secret/gh_token
-GHCR_TOKEN_FILE=/Users/chris/.secret/ghcr_token
+GH_TOKEN_FILE=/Users/me/.secret/gh_token
+GHCR_TOKEN_FILE=/Users/me/.secret/ghcr_token
 GITHUB_NAMESPACE=my-github-username
-LOG_LEVEL=DEBUG
 PYPI_USERNAME=somebody
-PYPI_TOKEN_FILE=/Users/chris/.secret/pypi_token
+PYPI_TOKEN_FILE=/Users/me/.secret/pypi_token
 ```
