@@ -4,9 +4,9 @@ This is a template for a simple, containerized Flask application.
 
 The machinary for managing this application is however significantly more sophisticated. This project uses [Just](https://github.com/casey/just?tab=readme-ov-file).
 
-You can run the command `just` to see the scripts available. If you don't have `just` installed yet, then you can get it by running `./utilts/install-just.sh`
+You can run the command `just` to see the scripts available. If you don't have `just` installed yet, then you can get it by running `./utils/install-just.sh`
 
-Little preview:
+Here is a preview:
 
 - `just build`
 - `just fmt` (black & isort)
@@ -18,9 +18,11 @@ Little preview:
 - `just install-gcloud`
 - `just install-jq`
 - `just publish-aws-ecr`
+- `just publish-aws-codeartifact`
 - `just publish-ghcr`
 - `just publish-gar`
 - `just publish-dockerhub`
+- `just publish-pypi`
 
 ### Starter .env
 
