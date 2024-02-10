@@ -2,7 +2,6 @@
 
 # TODO
 # double check exposed vars for each recipe
-# publish-aws-codeartifact
 
 # -- Settings --
 set dotenv-load
@@ -12,13 +11,15 @@ set dotenv-load
 name := "${APP_NAME:-flask-app}"
 log_level := "${APP_LOG_LEVEL:-INFO}"
 localhost_port := "${APP_PORT:-5001}"
-gh_token := `cat ${GH_TOKEN_FILE} || echo ""`
+gh_token := `if [[ -f ${GH_TOKEN_FILE:-} ]]; then cat ${GH_TOKEN_FILE:-}; fi`
+pypi_username := "${PYPI_USERNAME:-}"
+pypi_token := `if [[ -f ${PYPI_TOKEN_FILE:-} ]]; then cat ${PYPI_TOKEN_FILE:-}; fi`
 # -- Variables --
 
 # -- Container Registry Variables --
 dockerhub_namespace := "${DOCKERHUB_NAMESPACE:-}"
 github_namespace := "${GITHUB_NAMESPACE:-}"
-ghcr_token := `cat ${GH_TOKEN_FILE:-~/.secret/ghcr_token} || echo -n ""`
+ghcr_token := `if [[ -f ${GHCR_TOKEN_FILE:-} ]]; then cat ${GHCR_TOKEN_FILE:-}; fi`
 
 gcloud_region := "${CLOUDSDK_COMPUTE_ZONE:-us-west1}"
 gcloud_registry := "${GCLOUD_GAR_REGISTRY:-main}"
@@ -60,11 +61,20 @@ aws-codeartifact-login: _requires-aws
         exit
     fi
     repo_flags="--domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --repository {{aws_codeartifact_repository}}"
+    if command -v npm >/dev/null; then
+        aws codeartifact login --tool npm $repo_flags
+    fi
+    if [[ -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+        source {{justfile_directory()}}/.venv-dev/bin/activate
+    fi
     if command -v pip >/dev/null; then
         aws codeartifact login --tool pip $repo_flags
     fi
-    if command -v npm >/dev/null; then
-        aws codeartifact login --tool npm $repo_flags
+    if command -v poetry >/dev/null; then
+        endpoint=$(aws codeartifact get-repository-endpoint --domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --repository {{aws_codeartifact_repository}} --format pypi --query repositoryEndpoint --output text)
+        token=$(aws codeartifact get-authorization-token --domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --query authorizationToken --output text)
+        poetry config repositories.codeartifact "$endpoint"
+        poetry config http-basic.codeartifact aws "$token"
     fi
 
 # (AWS API) Start a session with AWS Elastic Container Registry
@@ -87,23 +97,23 @@ build-reqs *FLAGS:
 
 # Generate requirements.txt from requirements.in using pip-tools
 build-reqs-deploy *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements.txt requirements/requirements.in
+    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements.txt requirements/requirements.in
 
 # Generate requirements-dev.txt from requirements-dev.in using pip-tools
 build-reqs-dev *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements-dev.txt requirements/requirements-dev.in
+    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements-dev.txt requirements/requirements-dev.in
 
 # Generate requirements-dev.txt from requirements-dev.in using pip-tools
 build-reqs-fmt *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements-fmt.txt requirements/requirements-fmt.in
+    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements-fmt.txt requirements/requirements-fmt.in
 
 # Generate requirements-dev.txt from requirements-dev.in using pip-tools
 build-reqs-lint *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements-lint.txt requirements/requirements-lint.in
+    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements-lint.txt requirements/requirements-lint.in
 
 # Generate requirements-test.txt from requirements-test.in using pip-tools
 build-reqs-test *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras -o requirements/requirements-test.txt requirements/requirements-test.in
+    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements-test.txt requirements/requirements-test.in
 
 # Remove development containers and images
 clean: stop clean-containers clean-images
@@ -363,6 +373,27 @@ pretty-dev-containers:
 
 # Publish Python package to AWS CodeArtifact
 publish-aws-codeartifact: aws-codeartifact-login
+    #!/usr/bin/env -S bash -euxo pipefail
+    if [[ ! -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+        python3 -m venv {{justfile_directory()}}/.venv-dev
+    fi
+    source {{justfile_directory()}}/.venv-dev/bin/activate
+    python3 -m pip install --upgrade pip
+    python3 -m pip install -r requirements/requirements.txt
+    poetry build && poetry publish -r codeartifact
+
+# Publish Python package to PyPI
+publish-pypi:
+    #!/usr/bin/env -S bash -euxo pipefail
+    if [[ ! -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+        python3 -m venv {{justfile_directory()}}/.venv-dev
+    fi
+    source {{justfile_directory()}}/.venv-dev/bin/activate
+    python3 -m pip install --upgrade pip
+    python3 -m pip install -r requirements/requirements.txt
+    poetry config --unset
+    poetry config pypi-token.pypi {{pypi_token}}
+    poetry build && poetry publish
 
 # Publish container image to AWS Elastic Container Registry
 publish-aws-ecr *TAGS="": _requires-aws
@@ -502,6 +533,8 @@ test:
     echo log_level:\\t\\t\\t{{log_level}}
     echo localhost_port:\\t\\t\\t{{localhost_port}}
     echo gh_token:\\t\\t\\t{{gh_token}}
+    echo pypi_username:\\t\\t\\t{{pypi_username}}
+    echo pypi_token:\\t\\t\\t{{pypi_token}}
     echo dockerhub_namespace:\\t\\t{{dockerhub_namespace}}
     echo github_namespace:\\t\\t{{github_namespace}}
     echo ghcr_token:\\t\\t\\t{{ghcr_token}}

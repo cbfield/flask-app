@@ -6,11 +6,25 @@ requires-python = ">=3.9"
 license = { file = "LICENSE" }
 keywords = ["flask", "gunicorn", "docker", "api", "web"]
 dynamic = ["readme"]
+urls = { Homepage = "https://github.com/cbfield/flask-app" }
+
+[tool.poetry]
+name = "cbfield-flask-app"
+version = "0.1.0"
+description = "A Flask Application"
+authors = []
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.7"
 
 [tool.setuptools.dynamic]
 readme = { file = ["README.md"] }
 dependencies = { file = ["requirements.in"] }
 optional-dependencies.dev = { file = ["requirements-dev.in"] }
+optional-dependencies.fmt = { file = ["requirements-fmt.in"] }
+optional-dependencies.lint = { file = ["requirements-lint.in"] }
 optional-dependencies.test = { file = ["requirements-test.in"] }
 
 [build-system]
