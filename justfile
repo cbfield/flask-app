@@ -8,7 +8,8 @@ set dotenv-load
 name := "${APP_NAME:-flask-app}"
 log_level := "${APP_LOG_LEVEL:-INFO}"
 localhost_port := "${APP_PORT:-5001}"
-gh_token := `if test -f ${GH_TOKEN_FILE:-}; then cat ${GH_TOKEN_FILE:-}; fi`
+gh_token := `if test -n ${GH_TOKEN:-}; then echo ${GH_TOKEN:-}; fi`
+gh_token_file := `if test -n ${GH_TOKEN_FILE:-}; then cat ${GH_TOKEN_FILE:-}; fi`
 pypi_username := "${PYPI_USERNAME:-}"
 pypi_token := `if test -f ${PYPI_TOKEN_FILE:-}; then cat ${PYPI_TOKEN_FILE:-}; fi`
 # -- Variables --
@@ -207,8 +208,8 @@ _get-gh-release-asset-id ASSET:
 # Get a Github release (json)
 get-gh-release OWNER REPO TAG:
     #!/usr/bin/env -S bash -euo pipefail
-    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
-    curl "$headers" -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
+    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer $(just _get-gh-token)"'
+    curl $headers -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
 
 # Download a Github release binary asset
 get-gh-release-binary OWNER REPO TAG ASSET DEST:
@@ -219,14 +220,19 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
         printf "Asset %s not found.\n\n" "{{ASSET}}" >&2; exit 1
     fi
     curl -sL -o "{{DEST}}" \
-      -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}" \
+      -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer $(just _get-gh-token)" \
       https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/assets/$asset_id
     chmod +x "{{DEST}}"
+
+_get-gh-token:
+    #!/usr/bin/env -S bash -euo pipefail
+    if test -n "${GH_TOKEN:-}"; then echo -n "${GH_TOKEN:-}" && exit; fi
+    if test -n "${GH_TOKEN_FILE:-}"; then cat "${GH_TOKEN_FILE:-}" && exit; fi
 
 # Get the latest release for a given Github repo
 get-latest-gh-release OWNER REPO:
     #!/usr/bin/env -S bash -euo pipefail
-    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
+    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer $(just _get-gh-token)"'
     releases=$(curl "$headers" -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
     echo $releases | just _handle-gh-api-errors | just _get-first-item
 
@@ -525,7 +531,7 @@ test:
     echo name:\\t\\t\\t\\t{{name}}
     echo log_level:\\t\\t\\t{{log_level}}
     echo localhost_port:\\t\\t\\t{{localhost_port}}
-    echo gh_token:\\t\\t\\t{{gh_token}}
+    echo gh_token:\\t\\t\\t"$(just _get-gh-token)"
     echo pypi_username:\\t\\t\\t{{pypi_username}}
     echo pypi_token:\\t\\t\\t{{pypi_token}}
     echo dockerhub_namespace:\\t\\t{{dockerhub_namespace}}
