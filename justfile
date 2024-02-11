@@ -86,6 +86,7 @@ build: start-docker
 
 # Generate requirements*.txt from requirements*.in using pip-tools
 build-reqs-all:
+    #!/usr/bin/env -S bash -euxo pipefail
     just build-reqs
     just build-reqs dev
     just build-reqs fmt
