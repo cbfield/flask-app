@@ -8,15 +8,15 @@ set dotenv-load
 name := "${APP_NAME:-flask-app}"
 log_level := "${APP_LOG_LEVEL:-INFO}"
 localhost_port := "${APP_PORT:-5001}"
-gh_token := `if [[ -f ${GH_TOKEN_FILE:-} ]]; then cat ${GH_TOKEN_FILE:-}; fi`
+gh_token := `if test -f ${GH_TOKEN_FILE:-}; then cat ${GH_TOKEN_FILE:-}; fi`
 pypi_username := "${PYPI_USERNAME:-}"
-pypi_token := `if [[ -f ${PYPI_TOKEN_FILE:-} ]]; then cat ${PYPI_TOKEN_FILE:-}; fi`
+pypi_token := `if test -f ${PYPI_TOKEN_FILE:-}; then cat ${PYPI_TOKEN_FILE:-}; fi`
 # -- Variables --
 
 # -- Container Registry Variables --
 dockerhub_namespace := "${DOCKERHUB_NAMESPACE:-}"
 github_namespace := "${GITHUB_NAMESPACE:-}"
-ghcr_token := `if [[ -f ${GHCR_TOKEN_FILE:-} ]]; then cat ${GHCR_TOKEN_FILE:-}; fi`
+ghcr_token := `if test -f ${GHCR_TOKEN_FILE:-}; then cat ${GHCR_TOKEN_FILE:-}; fi`
 
 gcloud_region := "${CLOUDSDK_COMPUTE_ZONE:-us-west1}"
 gcloud_registry := "${GCLOUD_GAR_REGISTRY:-main}"
@@ -54,14 +54,14 @@ api PATH="/api/v1/":
 # (AWS API) Start a session with AWS CodeArtifact
 aws-codeartifact-login: _requires-aws
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ -z "{{aws_codeartifact_domain}}" ]] && [[ -z "{{aws_codeartifact_repository}}" ]]; then
+    if test -z "{{aws_codeartifact_domain}}" && test -z "{{aws_codeartifact_repository}}"; then
         exit
     fi
     repo_flags="--domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --repository {{aws_codeartifact_repository}}"
     if command -v npm >/dev/null; then
         aws codeartifact login --tool npm $repo_flags
     fi
-    if [[ -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+    if test -x {{justfile_directory()}}/.venv-dev/bin/activate; then
         source {{justfile_directory()}}/.venv-dev/bin/activate
     fi
     if command -v pip >/dev/null; then
@@ -97,10 +97,10 @@ build-reqs-all:
 build-reqs PY_ENV="":
     #!/usr/bin/env -S bash -euxo pipefail
     reqs_name=requirements/requirements
-    if [[ -n "{{PY_ENV}}" ]]; then
+    if test -n "{{PY_ENV}}"; then
         reqs_name+="-{{PY_ENV}}"
     fi
-    if [[ ! -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-dev/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-dev
     fi
     source {{justfile_directory()}}/.venv-dev/bin/activate
@@ -140,7 +140,7 @@ clean-images IMAGES="$(just get-dev-images)":
     images="{{IMAGES}}"
     if echo -n "$images" | grep -q . ; then 
         for image in $images; do
-            if [[ -z $(just _is-ancestor "$image") ]]; then
+            if test -z $(just _is-ancestor "$image"); then
                 docker rmi -f "$image"
             fi
         done
@@ -156,7 +156,7 @@ docker-status:
 # Format src/ (black & isort)
 fmt:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-fmt/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-fmt/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-fmt
     fi
     source {{justfile_directory()}}/.venv-fmt/bin/activate
@@ -176,7 +176,7 @@ fmt:
 # (AWS API util) Get AWS Elastic Container Registry address for the current AWS account
 _get-aws-ecr-address ACCOUNT=aws_ecr_account_id REGION=aws_default_region:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ -n "{{ACCOUNT}}" ]]; then
+    if test -n "{{ACCOUNT}}"; then
         echo -n "{{ACCOUNT}}".dkr.ecr.{{REGION}}.amazonaws.com
     else
         account=$(aws sts get-caller-identity | python3 -c "import sys, json; print(json.load(sys.stdin)['Account'])")
@@ -185,7 +185,7 @@ _get-aws-ecr-address ACCOUNT=aws_ecr_account_id REGION=aws_default_region:
 
 # (JSON util) Return the first item in a JSON list. Return nothing if invalid JSON or type != list.
 _get-first-item:
-    #!/usr/bin/env -S bash -euxo pipefail -c python3
+    #!/usr/bin/env -S python3
     import json, sys
     try:
         d = json.load(sys.stdin)
@@ -196,7 +196,7 @@ _get-first-item:
 
 # (Github API util) Return the id of a given asset in a Github release
 _get-gh-release-asset-id ASSET:
-    #!/usr/bin/env -S bash -euxo pipefail -c python3
+    #!/usr/bin/env -S python3
     import json, sys
     try:
         d = json.load(sys.stdin)
@@ -215,7 +215,7 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
     #!/usr/bin/env -S bash -euo pipefail
     printf "\nRetrieving Release Binary...\n\nOWNER:\t\t%s\nREPO:\t\t%s\nRELEASE TAG:\t%s\nTARGET:\t\t%s\nDESTINATION:\t%s\n\n" {{OWNER}} {{REPO}} {{TAG}} {{ASSET}} {{DEST}}
     asset_id=$(just get-gh-release {{OWNER}} {{REPO}} {{TAG}} | just _get-gh-release-asset-id {{ASSET}})
-    if [[ -z "$asset_id" ]]; then
+    if test -z "$asset_id"; then
         printf "Asset %s not found.\n\n" "{{ASSET}}" >&2; exit 1
     fi
     curl -L --no-progress-meter -o "{{DEST}}" \
@@ -232,7 +232,7 @@ get-latest-gh-release OWNER REPO:
 
 # (Github API util) Return unchanged JSON input if valid JSON and doesn't contain not-found or rate-limit-exceeded errors.
 _handle-gh-api-errors:
-    #!/usr/bin/env -S bash -euxo pipefail -c python3
+    #!/usr/bin/env -S python3
     import json, sys
     try:
         d = json.load(sys.stdin)
@@ -291,7 +291,7 @@ install-gcloud VERSION="463.0.0":
 install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
     #!/usr/bin/env -S bash -euxo pipefail
     version="{{VERSION}}"
-    if [[ "$version" == "latest" ]]; then
+    if [ "$version" == "latest" ]; then
         echo "Looking up latest version..."
         release=$(just get-latest-gh-release jqlang jq)
         version=$(echo "$release" | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"].split("-")[-1])')
@@ -299,7 +299,7 @@ install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
     else
         printf "Validating version %s...\n" "$version"
         release=$(just get-gh-release jqlang jq "jq-$version")
-        if [[ -n "$release" ]]; then
+        if test -n "$release"; then
             echo "Valid!"
         else
             printf "Version %s not found.\n\n" "$version" >&2; exit 1
@@ -312,7 +312,7 @@ install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
         x86_64-MINGW64_NT)  asset=jq-windows-amd64;;
         x86_64-Windows_NT)  asset=jq-windows-amd64;;
     esac
-    if [[ -n "{{TARGET}}" ]]; then
+    if test -n "{{TARGET}}"; then
         asset="{{TARGET}}"
     fi
     just get-gh-release-binary jqlang jq "jq-$version" "$asset" "{{INSTALL_DIR}}/jq"
@@ -339,7 +339,7 @@ _is-ancestor IMAGE:
 # Lint src/ (pylint & flake8)
 lint:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-lint/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-lint/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-lint
     fi
     source {{justfile_directory()}}/.venv-lint/bin/activate
@@ -367,7 +367,7 @@ pretty-dev-containers:
 # Publish Python package to AWS CodeArtifact
 publish-aws-codeartifact: aws-codeartifact-login
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-dev/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-dev
     fi
     source {{justfile_directory()}}/.venv-dev/bin/activate
@@ -378,7 +378,7 @@ publish-aws-codeartifact: aws-codeartifact-login
 # Publish Python package to PyPI
 publish-pypi:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-dev/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-dev
     fi
     source {{justfile_directory()}}/.venv-dev/bin/activate
@@ -433,7 +433,7 @@ _requires-aws:
         printf "You need the AWS Command Line Interface to run this command.\n\n❯ just install-aws\n\n" >&2
         exit 1
     fi
-    if [[ -z $(aws sts get-caller-identity 2>/dev/null) ]]; then
+    if test -z $(aws sts get-caller-identity 2>/dev/null); then
         aws sso login
     fi
 
@@ -444,7 +444,7 @@ _requires-gcloud:
         printf "You need the Google Cloud Command Line Interface to run this command.\n\n❯ just install-gcloud\n\n" >&2
         exit 1
     fi
-    if [[ -z $(gcloud auth list --filter=status:ACTIVE --format="value(account)") ]]; then
+    if test -z $(gcloud auth list --filter=status:ACTIVE --format="value(account)"); then
         gcloud auth login
     fi
 
@@ -452,11 +452,11 @@ _requires-gcloud:
 run PORT="" NAME="": build
     #!/usr/bin/env -S bash -euo pipefail
     port="{{localhost_port}}"
-    if [[ -z "$port" ]]; then 
+    if test -z "$port"; then 
         port="{{localhost_port}}"
     fi
     name="{{NAME}}"
-    if [[ -z "$name" ]]; then 
+    if test -z "$name"; then 
         name="flask-app-$(head -c 8 <<< `uuidgen`)"
     fi
     docker run --rm -d --name="$name" -p "$port":5000 -e LOG_LEVEL={{log_level}} {{name}}
@@ -466,7 +466,7 @@ start-docker:
     #!/usr/bin/env -S bash -euo pipefail
     if ( ! docker stats --no-stream 2>/dev/null ); then
         echo "Starting the Docker daemon..."
-        if [[ {{os()}} == "macos" ]]; then
+        if [ "{{os()}}" = "macos" ]; then
             open /Applications/Docker.app
         else if command -v systemctl >/dev/null; then
             sudo systemctl start docker
@@ -483,7 +483,7 @@ start-docker:
 status:
     #!/usr/bin/env -S bash -euo pipefail
     containers=$(just get-dev-containers 2>/dev/null)
-    if [[ -z $containers ]]; then
+    if test -z $containers; then
         printf "\nNo development containers.\n\n";
     else
         printf "\nDevelopment Containers:\n\n"
@@ -512,7 +512,7 @@ stop-all-containers:
 # Test src/ (Pytest)
 test:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-test/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-test/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-test
     fi
     source {{justfile_directory()}}/.venv-test/bin/activate
