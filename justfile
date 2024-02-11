@@ -185,7 +185,7 @@ _get-aws-ecr-address ACCOUNT=aws_ecr_account_id REGION=aws_default_region:
 
 # (JSON util) Return the first item in a JSON list. Return nothing if invalid JSON or type != list.
 _get-first-item:
-    #!/usr/bin/env -S python3
+    #!/usr/bin/env -S bash -euxo pipefail -c python3
     import json, sys
     try:
         d = json.load(sys.stdin)
@@ -196,7 +196,7 @@ _get-first-item:
 
 # (Github API util) Return the id of a given asset in a Github release
 _get-gh-release-asset-id ASSET:
-    #!/usr/bin/env -S python3
+    #!/usr/bin/env -S bash -euxo pipefail -c python3
     import json, sys
     try:
         d = json.load(sys.stdin)
@@ -232,7 +232,7 @@ get-latest-gh-release OWNER REPO:
 
 # (Github API util) Return unchanged JSON input if valid JSON and doesn't contain not-found or rate-limit-exceeded errors.
 _handle-gh-api-errors:
-    #!/usr/bin/env -S python3
+    #!/usr/bin/env -S bash -euxo pipefail -c python3
     import json, sys
     try:
         d = json.load(sys.stdin)

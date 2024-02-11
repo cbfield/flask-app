@@ -17,20 +17,14 @@ jobs:
       - uses: actions/checkout@v3
       - uses: extractions/setup-just@v1
       - name: Test
-        shell: bash
         run: just test
       - name: Lint
-        shell: bash
         run: just lint
       - name: Install AWS
-        shell: bash
         run: just install-aws
       - name: Install JQ
-        shell: bash
         run: echo $SHELL && just install-jq
       - name: Install GCloud
-        shell: bash
         run: just install-gcloud
       - name: Versions
-        shell: bash
         run: jq --version && aws --version && gcloud --version
