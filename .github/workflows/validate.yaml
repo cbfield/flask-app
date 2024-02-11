@@ -1,0 +1,30 @@
+name: Test & Lint
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*.*.*"
+  pull_request:
+    branches:
+      - "main"
+
+jobs:
+  Test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: extractions/setup-just@v1
+      - name: Test
+        run: just test
+      - name: Lint
+        run: just lint
+      - name: Install AWS
+        run: just install-aws
+      - name: Install JQ
+        run: just install-jq
+      - name: Install GCloud
+        run: just install-gcloud
+      - name: Versions
+        run: jq --version && aws --version && gcloud --version
