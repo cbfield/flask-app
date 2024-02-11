@@ -85,32 +85,27 @@ build: start-docker
     docker build -t {{name}} .
 
 # Generate requirements*.txt from requirements*.in using pip-tools
-build-reqs *FLAGS:
-    just build-reqs-deploy {{FLAGS}}
-    just build-reqs-dev {{FLAGS}}
-    just build-reqs-fmt {{FLAGS}}
-    just build-reqs-lint {{FLAGS}}
-    just build-reqs-test {{FLAGS}}
+build-reqs-all:
+    just build-reqs
+    just build-reqs dev
+    just build-reqs fmt
+    just build-reqs lint
+    just build-reqs test
 
-# Generate requirements.txt from requirements.in using pip-tools
-build-reqs-deploy *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements.txt requirements/requirements.in
-
-# Generate requirements-dev.txt from requirements-dev.in using pip-tools
-build-reqs-dev *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements-dev.txt requirements/requirements-dev.in
-
-# Generate requirements-dev.txt from requirements-dev.in using pip-tools
-build-reqs-fmt *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements-fmt.txt requirements/requirements-fmt.in
-
-# Generate requirements-dev.txt from requirements-dev.in using pip-tools
-build-reqs-lint *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements-lint.txt requirements/requirements-lint.in
-
-# Generate requirements-test.txt from requirements-test.in using pip-tools
-build-reqs-test *FLAGS:
-    pip-compile {{FLAGS}} --strip-extras --no-emit-index-url -o requirements/requirements-test.txt requirements/requirements-test.in
+# Generate requirements-{{PY_ENV}}.txt files from requirements-{{PY_ENV}}.in files
+build-reqs PY_ENV="":
+    #!/usr/bin/env -S bash -euxo pipefail
+    reqs_name=requirements/requirements
+    if [[ -n "{{PY_ENV}}" ]]; then
+        reqs_name+="-{{PY_ENV}}"
+    fi
+    if [[ ! -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+        python3 -m venv {{justfile_directory()}}/.venv-dev
+    fi
+    source {{justfile_directory()}}/.venv-dev/bin/activate
+    python3 -m pip install --upgrade pip
+    python3 -m pip install -r requirements/requirements-dev.txt
+    pip-compile --strip-extras --no-emit-index-url -o "$reqs_name".txt "$reqs_name".in
 
 # Remove development containers and images
 clean: stop clean-containers clean-images
