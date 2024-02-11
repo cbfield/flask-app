@@ -48,7 +48,7 @@ api PATH="/api/v1/":
         --retry-delay 1 \
         --retry-max-time 30 \
         --retry-connrefused \
-        --no-progress-meter \
+        -sL \
         http://localhost:{{localhost_port}}{{PATH}}
 
 # (AWS API) Start a session with AWS CodeArtifact
@@ -208,7 +208,7 @@ _get-gh-release-asset-id ASSET:
 get-gh-release OWNER REPO TAG:
     #!/usr/bin/env -S bash -euo pipefail
     headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
-    curl "$headers" -L --no-progress-meter https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
+    curl "$headers" -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
 
 # Download a Github release binary asset
 get-gh-release-binary OWNER REPO TAG ASSET DEST:
@@ -218,7 +218,7 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
     if test -z "$asset_id"; then
         printf "Asset %s not found.\n\n" "{{ASSET}}" >&2; exit 1
     fi
-    curl -L --no-progress-meter -o "{{DEST}}" \
+    curl -sL -o "{{DEST}}" \
       -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}" \
       https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/assets/$asset_id
     chmod +x "{{DEST}}"
@@ -227,7 +227,7 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
 get-latest-gh-release OWNER REPO:
     #!/usr/bin/env -S bash -euo pipefail
     headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
-    releases=$(curl "$headers" -L --no-progress-meter https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
+    releases=$(curl "$headers" -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
     echo $releases | just _handle-gh-api-errors | just _get-first-item
 
 # (Github API util) Return unchanged JSON input if valid JSON and doesn't contain not-found or rate-limit-exceeded errors.
@@ -248,14 +248,14 @@ install-aws:
     echo "Installing the AWS Command Line Interface..."
     case "{{os()}}" in
         linux)
-            curl --no-progress-meter "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             trap 'rm -rf -- "awscliv2.zip"' EXIT
             unzip awscliv2.zip
             sudo ./aws/install --update
             trap 'rm -rf -- "./aws"' EXIT
         ;;
         macos)
-            curl --no-progress-meter "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+            curl -sL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
             trap 'rm -rf -- "AWSCLIV2.pkg"' EXIT
             sudo installer -pkg AWSCLIV2.pkg -target /
         ;;
@@ -274,7 +274,7 @@ install-gcloud VERSION="463.0.0":
     url="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads"
     machine=$(uname -m | sed -e 's/arm64/arm/g')
     distribution=$(uname -s | tr '[:upper:]' '[:lower:]')
-    curl -L --no-progress-meter \
+    curl -sL \
         "$url/google-cloud-cli-{{VERSION}}-$distribution-$machine.tar.gz" | tar -xzf - -C "$HOME"
     "$HOME/google-cloud-sdk/install.sh" -q
     gcloud_path="$HOME/google-cloud-sdk/path.$(basename $SHELL).inc"
