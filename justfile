@@ -251,7 +251,7 @@ install-aws:
             curl --no-progress-meter "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             trap 'rm -rf -- "awscliv2.zip"' EXIT
             unzip awscliv2.zip
-            sudo ./aws/install
+            sudo ./aws/install --update
             trap 'rm -rf -- "./aws"' EXIT
         ;;
         macos)
