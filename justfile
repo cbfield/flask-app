@@ -210,7 +210,7 @@ _get-gh-release-asset-id ASSET:
 get-gh-release OWNER REPO TAG:
     #!/usr/bin/env -S bash -euxo pipefail
     headers="-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H \"Authorization: Bearer ${GH_TOKEN}\""
-    curl $headers -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
+    curl $headers --http1.1 -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
 
 # Download a Github release binary asset
 get-gh-release-binary OWNER REPO TAG ASSET DEST:
@@ -220,7 +220,7 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
     if test -z "$asset_id"; then
         printf "Asset %s not found.\n\n" "{{ASSET}}" >&2; exit 1
     fi
-    curl -sL -o "{{DEST}}" \
+    curl -sL --http1.1 -o "{{DEST}}" \
       -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer ${GH_TOKEN}" \
       https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/assets/$asset_id
     chmod +x "{{DEST}}"
@@ -229,7 +229,7 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
 get-latest-gh-release OWNER REPO:
     #!/usr/bin/env -S bash -euxo pipefail
     headers="-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H \"Authorization: Bearer ${GH_TOKEN}\""
-    releases=$(curl "$headers" -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
+    releases=$(curl "$headers" --http1.1 -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
     echo $releases | just _handle-gh-api-errors | just _get-first-item
 
 # (Github API util) Return unchanged JSON input if valid JSON and doesn't contain not-found or rate-limit-exceeded errors.
