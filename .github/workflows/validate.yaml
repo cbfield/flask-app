@@ -10,6 +10,9 @@ on:
     branches:
       - "main"
 
+env:
+  GH_TOKEN: ${{GH_TOKEN}}
+
 jobs:
   Test:
     runs-on: ubuntu-latest
@@ -17,6 +20,6 @@ jobs:
       - uses: actions/checkout@v3
       - uses: extractions/setup-just@v1
       - name: Install JQ
-        run: export GH_TOKEN=${{GH_TOKEN}} && just install-jq
+        run: just install-jq
       - name: Install GCloud
         run: just install-gcloud
