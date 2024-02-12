@@ -220,7 +220,7 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
     if test -z "$asset_id"; then
         printf "Asset %s not found.\n\n" "{{ASSET}}" >&2; exit 1
     fi
-    if [[ ! -d $(basename "{{DEST}}") ]]; then mkdir -p $(basename "{{DEST}}"); fi
+    if [[ ! -d $(dirname "{{DEST}}") ]]; then mkdir -p $(dirname "{{DEST}}"); fi
     curl -sL --http1.1 -o "{{DEST}}" \
       -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer ${GH_TOKEN}" \
       https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/assets/$asset_id
