@@ -2,41 +2,35 @@
 
 #------------ Settings ------------
 set dotenv-load
+set export
 #------------ Settings ------------
 
 #------------ Variables -----------
-name := "${APP_NAME:-flask-app}"
-log_level := "${APP_LOG_LEVEL:-INFO}"
-localhost_port := "${APP_PORT:-5001}"
+APP_NAME := `echo ${APP_NAME:-flask-app}`
+APP_LOG_LEVEL := `echo ${APP_LOG_LEVEL:-INFO}`
+APP_PORT := `echo ${APP_PORT:-5001}`
 
-gh_namespace := "${GH_NAMESPACE:-}"
-gh_token := ```
+AWS_DEFAULT_REGION := `echo ${AWS_DEFAULT_REGION:-us-west-2}`
+AWS_ECR_REPOSITORY := `echo ${AWS_ECR_REPOSITORY:-flask-app}`
+
+GCLOUD_REGION := `echo ${CLOUDSDK_COMPUTE_ZONE:-us-west1}`
+GCLOUD_REGISTRY := `echo ${GCLOUD_REGISTRY:-main}`
+GCLOUD_REPOSITORY := `echo ${GCLOUD_REPOSITORY:-flask-app}`
+
+GH_TOKEN := ```
     if test -n "${GH_TOKEN:-}"; then { echo "${GH_TOKEN:-}"; exit; }; fi
     if test -f "${GH_TOKEN_FILE:-}"; then cat "${GH_TOKEN_FILE:-}"; fi
 ```
 
-pypi_username := "${PYPI_USERNAME:-}"
-pypi_token := ```
+PYPI_TOKEN := ```
     if test -n "${PYPI_TOKEN:-}"; then { echo "${PYPI_TOKEN:-}"; exit; }; fi
     if test -f "${PYPI_TOKEN_FILE:-}"; then cat "${PYPI_TOKEN_FILE:-}"; fi
 ```
 
-dockerhub_namespace := "${DOCKERHUB_NAMESPACE:-}"
-ghcr_token := ```
+GHCR_TOKEN := ```
     if test -n "${GHCR_TOKEN:-}"; then { echo "${GHCR_TOKEN:-}"; exit; }; fi
     if test -f "${GHCR_TOKEN_FILE:-}"; then cat "${GHCR_TOKEN_FILE:-}"; fi
 ```
-
-gcloud_project_id := "${CLOUDSDK_CORE_PROJECT:-}"
-gcloud_region := "${CLOUDSDK_COMPUTE_ZONE:-us-west1}"
-gcloud_registry := "${GCLOUD_GAR_REGISTRY:-main}"
-
-aws_codeartifact_domain_owner := "${AWS_CODEARTIFACT_DOMAIN_OWNER:-}"
-aws_codeartifact_domain := "${AWS_CODEARTIFACT_DOMAIN:-}"
-aws_codeartifact_repository := "${AWS_CODEARTIFACT_REPOSITORY:-}"
-
-aws_ecr_account_id := "${AWS_ECR_ACCOUNT_ID:-}"
-aws_ecr_repository := "${AWS_ECR_REPOSITORY:-flask-app}"
 #------------ Variables -----------
 
 # ------------ Recipes ------------
@@ -57,15 +51,15 @@ api PATH="/api/v1/":
         --retry-max-time 30 \
         --retry-connrefused \
         -sL \
-        http://localhost:{{localhost_port}}{{PATH}}
+        http://localhost:${APP_PORT}{{PATH}}
 
 # (AWS API) Start a session with AWS CodeArtifact
 aws-codeartifact-login: _requires-aws
     #!/usr/bin/env -S bash -euxo pipefail
-    if test -z "{{aws_codeartifact_domain}}" && test -z "{{aws_codeartifact_repository}}"; then
+    if test -z "${AWS_CODEARTIFACT_DOMAIN}" && test -z "${AWS_CODEARTIFACT_REPOSITORY}"; then
         exit
     fi
-    repo_flags="--domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --repository {{aws_codeartifact_repository}}"
+    repo_flags="--domain ${AWS_CODEARTIFACT_DOMAIN} --domain-owner ${AWS_CODEARTIFACT_DOMAIN_OWNER} --repository ${AWS_CODEARTIFACT_REPOSITORY}"
     if command -v npm >/dev/null; then
         aws codeartifact login --tool npm $repo_flags
     fi
@@ -76,21 +70,21 @@ aws-codeartifact-login: _requires-aws
         aws codeartifact login --tool pip $repo_flags
     fi
     if command -v poetry >/dev/null; then
-        endpoint=$(aws codeartifact get-repository-endpoint --domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --repository {{aws_codeartifact_repository}} --format pypi --query repositoryEndpoint --output text)
-        token=$(aws codeartifact get-authorization-token --domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --query authorizationToken --output text)
+        endpoint=$(aws codeartifact get-repository-endpoint --domain ${AWS_CODEARTIFACT_DOMAIN} --domain-owner ${aws_codeartifact_domain_owner} --repository ${AWS_CODEARTIFACT_REPOSITORY} --format pypi --query repositoryEndpoint --output text)
+        token=$(aws codeartifact get-authorization-token --domain ${AWS_CODEARTIFACT_DOMAIN} --domain-owner ${AWS_CODEARTIFACT_DOMAIN_OWNER} --query authorizationToken --output text)
         poetry config repositories.codeartifact "$endpoint"
         poetry config http-basic.codeartifact aws "$token"
     fi
 
 # (AWS API) Start a session with AWS Elastic Container Registry
-aws-ecr-login ACCOUNT=aws_ecr_account_id REGION="${AWS_DEFAULT_REGION}": _requires-aws
+aws-ecr-login ACCOUNT="${AWS_ECR_ACCOUNT_ID}" REGION="${AWS_DEFAULT_REGION}": _requires-aws
     #!/usr/bin/env -S bash -euxo pipefail
     address=$(just _get-aws-ecr-address "{{ACCOUNT}}" "{{REGION}}")
     aws ecr get-login-password --region "{{REGION}}" | docker login --username AWS --password-stdin "$address"
 
 # Build the app container with Docker
 build: start-docker
-    docker build -t {{name}} .
+    docker build -t "${APP_NAME}" .
 
 # Generate requirements*.txt from requirements*.in using pip-tools
 build-reqs-all:
@@ -175,14 +169,14 @@ fmt:
 
 # List development container IDs
 @get-dev-containers:
-    echo $(docker ps -q --filter name="{{name}}*")
+    echo $(docker ps -q --filter name="${APP_NAME}*")
 
 # List development image IDs
 @get-dev-images:
     echo $(docker images -q)
 
 # (AWS API util) Get AWS Elastic Container Registry address for the current AWS account
-_get-aws-ecr-address ACCOUNT=aws_ecr_account_id REGION="${AWS_DEFAULT_REGION}":
+_get-aws-ecr-address ACCOUNT="${AWS_ECR_ACCOUNT_ID}" REGION="${AWS_DEFAULT_REGION}":
     #!/usr/bin/env -S bash -euxo pipefail
     if test -n "{{ACCOUNT}}"; then
         echo -n "{{ACCOUNT}}".dkr.ecr.{{REGION}}.amazonaws.com
@@ -215,7 +209,7 @@ _get-gh-release-asset-id ASSET:
 # Get a Github release (json)
 get-gh-release OWNER REPO TAG:
     #!/usr/bin/env -S bash -euxo pipefail
-    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
+    headers="-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H \"Authorization: Bearer ${GH_TOKEN}\""
     curl $headers -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
 
 # Download a Github release binary asset
@@ -227,14 +221,14 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
         printf "Asset %s not found.\n\n" "{{ASSET}}" >&2; exit 1
     fi
     curl -sL -o "{{DEST}}" \
-      -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}" \
+      -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer ${GH_TOKEN}" \
       https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/assets/$asset_id
     chmod +x "{{DEST}}"
 
 # Get the latest release for a given Github repo
 get-latest-gh-release OWNER REPO:
     #!/usr/bin/env -S bash -euxo pipefail
-    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
+    headers="-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H \"Authorization: Bearer ${GH_TOKEN}\""
     releases=$(curl "$headers" -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
     echo $releases | just _handle-gh-api-errors | just _get-first-item
 
@@ -370,7 +364,7 @@ pretty-dev-containers:
     #!/usr/bin/env -S bash -euo pipefail
     format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
     if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
-    docker ps --filter name="{{name}}*" --format=json 2>/dev/null | eval '$jq "$format"'
+    docker ps --filter name="${APP_NAME}*" --format=json 2>/dev/null | eval '$jq "$format"'
 
 # Publish Python package to AWS CodeArtifact
 publish-aws-codeartifact: aws-codeartifact-login
@@ -393,7 +387,7 @@ publish-pypi:
     python3 -m pip install --upgrade pip
     python3 -m pip install -r requirements/requirements.txt
     poetry config --unset
-    poetry config pypi-token.pypi {{pypi_token}}
+    poetry config pypi-token.pypi ${PYPI_TOKEN}
     poetry build && poetry publish
 
 # Publish container image to AWS Elastic Container Registry
@@ -409,28 +403,28 @@ publish-aws-ecr *TAGS="": _requires-aws
 # Publish container image to AWS Elastic Container Registry
 publish-dockerhub *TAGS="":
     #!/usr/bin/env -S bash -euxo pipefail
-    tags="-t {{dockerhub_namespace}}/{{name}}:latest"
+    tags="-t ${DOCKERHUB_NAMESPACE}/${APP_NAME}:latest"
     for tag in {{TAGS}}; do
-        tags+=" -t {{dockerhub_namespace}}/{{name}}:$tag"
+        tags+=" -t ${DOCKERHUB_NAMESPACE}/${APP_NAME}:$tag"
     done
     docker build --push $tags .
 
 # Publish container image to Google Artifact Registry
 publish-gar *TAGS="": _requires-gcloud
     #!/usr/bin/env -S bash -euxo pipefail
-    tags="-t {{gcloud_region}}-docker.pkg.dev/{{gcloud_project_id}}/{{gcloud_registry}}/{{name}}:latest"
+    tags="-t ${GCLOUD_REGION}-docker.pkg.dev/${GCLOUD_PROJECT_ID}/${GCLOUD_REGISTRY}/${APP_NAME}:latest"
     for tag in {{TAGS}}; do
-        tags+=" -t {{gcloud_region}}-docker.pkg.dev/{{gcloud_project_id}}/{{gcloud_registry}}/{{name}}:$tag"
+        tags+=" -t ${GCLOUD_REGION}-docker.pkg.dev/${GCLOUD_PROJECT_ID}/${GCLOUD_REGISTRY}/${APP_NAME}:$tag"
     done
     docker build --push $tags .
 
 # Publish container image to Github Container Registry
 publish-ghcr *TAGS="":
     #!/usr/bin/env -S bash -euxo pipefail
-    docker login ghcr.io -u {{gh_namespace}} -p {{ghcr_token}}
-    tags="-t ghcr.io/{{gh_namespace}}/{{name}}:latest"
+    docker login ghcr.io -u ${GH_NAMESPACE} -p ${GHCR_TOKEN}
+    tags="-t ghcr.io/${GH_NAMESPACE}/${APP_NAME}:latest"
     for tag in {{TAGS}}; do
-        tags+=" -t ghcr.io/{{gh_namespace}}/{{name}}:$tag"
+        tags+=" -t ghcr.io/${GH_NAMESPACE}/${APP_NAME}:$tag"
     done
     docker build --push $tags .
 
@@ -459,15 +453,11 @@ _requires-gcloud:
 # Build and run the app
 run PORT="" NAME="": build
     #!/usr/bin/env -S bash -euo pipefail
-    port="{{localhost_port}}"
-    if test -z "$port"; then 
-        port="{{localhost_port}}"
-    fi
     name="{{NAME}}"
     if test -z "$name"; then 
         name="flask-app-$(head -c 8 <<< `uuidgen`)"
     fi
-    docker run --rm -d --name="$name" -p "$port":5000 -e LOG_LEVEL={{log_level}} {{name}}
+    docker run --rm -d --name="${name}" -p "${APP_PORT}" -e "LOG_LEVEL=${LOG_LEVEL}" "${APP_NAME}"
 
 # Start the Docker daemon
 start-docker:
@@ -527,23 +517,3 @@ test:
     python3 -m pip install --upgrade pip
     python3 -m pip install -r requirements/requirements-test.txt
     pytest --verbose
-
-# Show values of justfile variables
-@vars:
-    echo name:\\t\\t\\t\\t{{name}}
-    echo log_level:\\t\\t\\t{{log_level}}
-    echo localhost_port:\\t\\t\\t{{localhost_port}}\\n
-    echo gh_namespace:\\t\\t\\t{{gh_namespace}}
-    echo gh_token:\\t\\t\\t"{{gh_token}}"\\n
-    echo pypi_username:\\t\\t\\t{{pypi_username}}
-    echo pypi_token:\\t\\t\\t{{pypi_token}}\\n
-    echo dockerhub_namespace:\\t\\t{{dockerhub_namespace}}
-    echo ghcr_token:\\t\\t\\t{{ghcr_token}}
-    echo gcloud_region:\\t\\t\\t{{gcloud_region}}
-    echo gcloud_registry:\\t\\t{{gcloud_registry}}
-    echo gcloud_project_id:\\t\\t{{gcloud_project_id}}\\n
-    echo aws_codeartifact_domain:\\t{{aws_codeartifact_domain}}
-    echo aws_codeartifact_domain_owner:\\t{{aws_codeartifact_domain_owner}}
-    echo aws_codeartifact_repository:\\t{{aws_codeartifact_repository}}
-    echo aws_ecr_account_id:\\t\\t{{aws_ecr_account_id}}
-    echo aws_ecr_repository:\\t\\t{{aws_ecr_repository}}
