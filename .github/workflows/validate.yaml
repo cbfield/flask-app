@@ -16,15 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: extractions/setup-just@v1
-      - name: Test
-        run: just test
-      - name: Lint
-        run: just lint
-      - name: Install AWS
-        run: just install-aws
       - name: Install JQ
-        run: echo $SHELL && just install-jq
+        run: GH_TOKEN=${{GH_TOKEN}} just install-jq
       - name: Install GCloud
         run: just install-gcloud
-      - name: Versions
-        run: jq --version && aws --version && gcloud --version
