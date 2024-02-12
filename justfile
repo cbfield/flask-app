@@ -208,13 +208,13 @@ _get-gh-release-asset-id ASSET:
 
 # Get a Github release (json)
 get-gh-release OWNER REPO TAG:
-    #!/usr/bin/env -S bash -euxo pipefail
+    #!/usr/bin/env -S bash -euo pipefail
     headers="-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H \"Authorization: Bearer ${GH_TOKEN}\""
     curl $headers --http1.1 -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
 
 # Download a Github release binary asset
 get-gh-release-binary OWNER REPO TAG ASSET DEST:
-    #!/usr/bin/env -S bash -euxo pipefail
+    #!/usr/bin/env -S bash -euo pipefail
     printf "\nRetrieving Release Binary...\n\nOWNER:\t\t%s\nREPO:\t\t%s\nRELEASE TAG:\t%s\nTARGET:\t\t%s\nDESTINATION:\t%s\n\n" {{OWNER}} {{REPO}} {{TAG}} {{ASSET}} {{DEST}}
     asset_id=$(just get-gh-release {{OWNER}} {{REPO}} {{TAG}} | just _get-gh-release-asset-id {{ASSET}})
     if test -z "$asset_id"; then
@@ -228,7 +228,7 @@ get-gh-release-binary OWNER REPO TAG ASSET DEST:
 
 # Get the latest release for a given Github repo
 get-latest-gh-release OWNER REPO:
-    #!/usr/bin/env -S bash -euxo pipefail
+    #!/usr/bin/env -S bash -euo pipefail
     headers="-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H \"Authorization: Bearer ${GH_TOKEN}\""
     releases=$(curl "$headers" --http1.1 -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
     echo $releases | just _handle-gh-api-errors | just _get-first-item
