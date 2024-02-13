@@ -1,35 +1,38 @@
 #!/usr/bin/env just --justfile
 
-# -- Settings --
+#------------ Settings ------------
 set dotenv-load
-# -- Settings --
+set export
+#------------ Settings ------------
 
-# -- Variables --
-name := "${APP_NAME:-flask-app}"
-log_level := "${APP_LOG_LEVEL:-INFO}"
-localhost_port := "${APP_PORT:-5001}"
-gh_token := `if [[ -f ${GH_TOKEN_FILE:-} ]]; then cat ${GH_TOKEN_FILE:-}; fi`
-pypi_username := "${PYPI_USERNAME:-}"
-pypi_token := `if [[ -f ${PYPI_TOKEN_FILE:-} ]]; then cat ${PYPI_TOKEN_FILE:-}; fi`
-# -- Variables --
+#------------ Variables -----------
+APP_NAME := `echo ${APP_NAME:-flask-app}`
+APP_LOG_LEVEL := `echo ${APP_LOG_LEVEL:-INFO}`
+APP_PORT := `echo ${APP_PORT:-5001}`
+BUILDX_BUILDER := `echo ${BUILDX_BUILDER:-builder}`
 
-# -- Container Registry Variables --
-dockerhub_namespace := "${DOCKERHUB_NAMESPACE:-}"
-github_namespace := "${GITHUB_NAMESPACE:-}"
-ghcr_token := `if [[ -f ${GHCR_TOKEN_FILE:-} ]]; then cat ${GHCR_TOKEN_FILE:-}; fi`
+AWS_DEFAULT_REGION := `echo ${AWS_DEFAULT_REGION:-us-west-2}`
+AWS_ECR_REPOSITORY := `echo ${AWS_ECR_REPOSITORY:-flask-app}`
 
-gcloud_region := "${CLOUDSDK_COMPUTE_ZONE:-us-west1}"
-gcloud_registry := "${GCLOUD_GAR_REGISTRY:-main}"
-gcloud_project_id := "${CLOUDSDK_CORE_PROJECT:-}"
+GCLOUD_REGION := `echo ${CLOUDSDK_COMPUTE_ZONE:-us-west1}`
+GCLOUD_REGISTRY := `echo ${GCLOUD_REGISTRY:-main}`
+GCLOUD_REPOSITORY := `echo ${GCLOUD_REPOSITORY:-flask-app}`
 
-aws_codeartifact_domain := "${AWS_CODEARTIFACT_DOMAIN:-}"
-aws_codeartifact_domain_owner := "${AWS_CODEARTIFACT_DOMAIN_OWNER:-}"
-aws_codeartifact_repository := "${AWS_CODEARTIFACT_REPOSITORY:-}"
+GH_TOKEN := ```
+    if test -n "${GH_TOKEN:-}"; then { echo "${GH_TOKEN:-}"; exit; }; fi
+    if test -f "${GH_TOKEN_FILE:-}"; then cat "${GH_TOKEN_FILE:-}"; fi
+```
 
-aws_default_region := "${AWS_DEFAULT_REGION:-us-west-2}"
-aws_ecr_account_id := "${AWS_ECR_ACCOUNT_ID:-}"
-aws_ecr_repository := "${AWS_ECR_REPOSITORY:-flask-app}"
-# -- Container Registry Variables --
+PYPI_TOKEN := ```
+    if test -n "${PYPI_TOKEN:-}"; then { echo "${PYPI_TOKEN:-}"; exit; }; fi
+    if test -f "${PYPI_TOKEN_FILE:-}"; then cat "${PYPI_TOKEN_FILE:-}"; fi
+```
+
+GHCR_TOKEN := ```
+    if test -n "${GHCR_TOKEN:-}"; then { echo "${GHCR_TOKEN:-}"; exit; }; fi
+    if test -f "${GHCR_TOKEN_FILE:-}"; then cat "${GHCR_TOKEN_FILE:-}"; fi
+```
+#------------ Variables -----------
 
 # ------------ Recipes ------------
 
@@ -48,41 +51,49 @@ api PATH="/api/v1/":
         --retry-delay 1 \
         --retry-max-time 30 \
         --retry-connrefused \
-        --no-progress-meter \
-        http://localhost:{{localhost_port}}{{PATH}}
+        -sL \
+        http://localhost:${APP_PORT}{{PATH}}
 
 # (AWS API) Start a session with AWS CodeArtifact
 aws-codeartifact-login: _requires-aws
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ -z "{{aws_codeartifact_domain}}" ]] && [[ -z "{{aws_codeartifact_repository}}" ]]; then
+    if test -z "${AWS_CODEARTIFACT_DOMAIN}" && test -z "${AWS_CODEARTIFACT_REPOSITORY}"; then
         exit
     fi
-    repo_flags="--domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --repository {{aws_codeartifact_repository}}"
+    repo_flags="--domain ${AWS_CODEARTIFACT_DOMAIN} --domain-owner ${AWS_CODEARTIFACT_DOMAIN_OWNER} --repository ${AWS_CODEARTIFACT_REPOSITORY}"
     if command -v npm >/dev/null; then
         aws codeartifact login --tool npm $repo_flags
     fi
-    if [[ -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+    if test -x {{justfile_directory()}}/.venv-dev/bin/activate; then
         source {{justfile_directory()}}/.venv-dev/bin/activate
     fi
     if command -v pip >/dev/null; then
         aws codeartifact login --tool pip $repo_flags
     fi
     if command -v poetry >/dev/null; then
-        endpoint=$(aws codeartifact get-repository-endpoint --domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --repository {{aws_codeartifact_repository}} --format pypi --query repositoryEndpoint --output text)
-        token=$(aws codeartifact get-authorization-token --domain {{aws_codeartifact_domain}} --domain-owner {{aws_codeartifact_domain_owner}} --query authorizationToken --output text)
+        endpoint=$(aws codeartifact get-repository-endpoint --domain ${AWS_CODEARTIFACT_DOMAIN} --domain-owner ${aws_codeartifact_domain_owner} --repository ${AWS_CODEARTIFACT_REPOSITORY} --format pypi --query repositoryEndpoint --output text)
+        token=$(aws codeartifact get-authorization-token --domain ${AWS_CODEARTIFACT_DOMAIN} --domain-owner ${AWS_CODEARTIFACT_DOMAIN_OWNER} --query authorizationToken --output text)
         poetry config repositories.codeartifact "$endpoint"
         poetry config http-basic.codeartifact aws "$token"
     fi
 
 # (AWS API) Start a session with AWS Elastic Container Registry
-aws-ecr-login ACCOUNT=aws_ecr_account_id REGION=aws_default_region: _requires-aws
+aws-ecr-login ACCOUNT="${AWS_ECR_ACCOUNT_ID}" REGION="${AWS_DEFAULT_REGION}": _requires-aws
     #!/usr/bin/env -S bash -euxo pipefail
     address=$(just _get-aws-ecr-address "{{ACCOUNT}}" "{{REGION}}")
     aws ecr get-login-password --region "{{REGION}}" | docker login --username AWS --password-stdin "$address"
 
 # Build the app container with Docker
 build: start-docker
-    docker build -t {{name}} .
+    #!/usr/bin/env -S bash -uxo pipefail
+    builder=$(docker buildx inspect "${BUILDX_BUILDER}" 2>/dev/null)
+    if test -z "$builder"; then
+        docker buildx create \
+            --name=${BUILDX_BUILDER} \
+            --driver=docker-container \
+            --platform=linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64
+    fi
+    docker buildx build --builder="${BUILDX_BUILDER}" --load -t "${APP_NAME}" .
 
 # Generate requirements*.txt from requirements*.in using pip-tools
 build-reqs-all:
@@ -97,10 +108,10 @@ build-reqs-all:
 build-reqs PY_ENV="":
     #!/usr/bin/env -S bash -euxo pipefail
     reqs_name=requirements/requirements
-    if [[ -n "{{PY_ENV}}" ]]; then
+    if test -n "{{PY_ENV}}"; then
         reqs_name+="-{{PY_ENV}}"
     fi
-    if [[ ! -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-dev/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-dev
     fi
     source {{justfile_directory()}}/.venv-dev/bin/activate
@@ -140,7 +151,7 @@ clean-images IMAGES="$(just get-dev-images)":
     images="{{IMAGES}}"
     if echo -n "$images" | grep -q . ; then 
         for image in $images; do
-            if [[ -z $(just _is-ancestor "$image") ]]; then
+            if test -z $(just _is-ancestor "$image"); then
                 docker rmi -f "$image"
             fi
         done
@@ -156,7 +167,7 @@ docker-status:
 # Format src/ (black & isort)
 fmt:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-fmt/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-fmt/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-fmt
     fi
     source {{justfile_directory()}}/.venv-fmt/bin/activate
@@ -167,16 +178,16 @@ fmt:
 
 # List development container IDs
 @get-dev-containers:
-    echo $(docker ps -q --filter name="{{name}}*")
+    echo $(docker ps -q --filter name="${APP_NAME}*")
 
 # List development image IDs
 @get-dev-images:
     echo $(docker images -q)
 
 # (AWS API util) Get AWS Elastic Container Registry address for the current AWS account
-_get-aws-ecr-address ACCOUNT=aws_ecr_account_id REGION=aws_default_region:
+_get-aws-ecr-address ACCOUNT="${AWS_ECR_ACCOUNT_ID}" REGION="${AWS_DEFAULT_REGION}":
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ -n "{{ACCOUNT}}" ]]; then
+    if test -n "{{ACCOUNT}}"; then
         echo -n "{{ACCOUNT}}".dkr.ecr.{{REGION}}.amazonaws.com
     else
         account=$(aws sts get-caller-identity | python3 -c "import sys, json; print(json.load(sys.stdin)['Account'])")
@@ -207,27 +218,28 @@ _get-gh-release-asset-id ASSET:
 # Get a Github release (json)
 get-gh-release OWNER REPO TAG:
     #!/usr/bin/env -S bash -euo pipefail
-    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
-    curl "$headers" -L --no-progress-meter https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
+    headers="-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H \"Authorization: Bearer ${GH_TOKEN}\""
+    curl $headers --http1.1 -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/tags/{{TAG}} | just _handle-gh-api-errors
 
 # Download a Github release binary asset
 get-gh-release-binary OWNER REPO TAG ASSET DEST:
     #!/usr/bin/env -S bash -euo pipefail
     printf "\nRetrieving Release Binary...\n\nOWNER:\t\t%s\nREPO:\t\t%s\nRELEASE TAG:\t%s\nTARGET:\t\t%s\nDESTINATION:\t%s\n\n" {{OWNER}} {{REPO}} {{TAG}} {{ASSET}} {{DEST}}
     asset_id=$(just get-gh-release {{OWNER}} {{REPO}} {{TAG}} | just _get-gh-release-asset-id {{ASSET}})
-    if [[ -z "$asset_id" ]]; then
+    if test -z "$asset_id"; then
         printf "Asset %s not found.\n\n" "{{ASSET}}" >&2; exit 1
     fi
-    curl -L --no-progress-meter -o "{{DEST}}" \
-      -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}" \
+    if [[ ! -d $(dirname "{{DEST}}") ]]; then mkdir -p $(dirname "{{DEST}}"); fi
+    curl -sL --http1.1 -o "{{DEST}}" \
+      -H "Accept: application/octet-stream" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer ${GH_TOKEN}" \
       https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases/assets/$asset_id
     chmod +x "{{DEST}}"
 
 # Get the latest release for a given Github repo
 get-latest-gh-release OWNER REPO:
     #!/usr/bin/env -S bash -euo pipefail
-    headers='-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" -H "Authorization: Bearer {{gh_token}}"'
-    releases=$(curl "$headers" -L --no-progress-meter https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
+    headers="-H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -H \"Authorization: Bearer ${GH_TOKEN}\""
+    releases=$(curl "$headers" --http1.1 -sL https://api.github.com/repos/{{OWNER}}/{{REPO}}/releases)
     echo $releases | just _handle-gh-api-errors | just _get-first-item
 
 # (Github API util) Return unchanged JSON input if valid JSON and doesn't contain not-found or rate-limit-exceeded errors.
@@ -248,14 +260,14 @@ install-aws:
     echo "Installing the AWS Command Line Interface..."
     case "{{os()}}" in
         linux)
-            curl --no-progress-meter "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            curl -sL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             trap 'rm -rf -- "awscliv2.zip"' EXIT
             unzip awscliv2.zip
-            sudo ./aws/install
+            sudo ./aws/install --update
             trap 'rm -rf -- "./aws"' EXIT
         ;;
         macos)
-            curl --no-progress-meter "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+            curl -sL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
             trap 'rm -rf -- "AWSCLIV2.pkg"' EXIT
             sudo installer -pkg AWSCLIV2.pkg -target /
         ;;
@@ -274,7 +286,7 @@ install-gcloud VERSION="463.0.0":
     url="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads"
     machine=$(uname -m | sed -e 's/arm64/arm/g')
     distribution=$(uname -s | tr '[:upper:]' '[:lower:]')
-    curl -L --no-progress-meter \
+    curl -sL \
         "$url/google-cloud-cli-{{VERSION}}-$distribution-$machine.tar.gz" | tar -xzf - -C "$HOME"
     "$HOME/google-cloud-sdk/install.sh" -q
     gcloud_path="$HOME/google-cloud-sdk/path.$(basename $SHELL).inc"
@@ -291,7 +303,7 @@ install-gcloud VERSION="463.0.0":
 install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
     #!/usr/bin/env -S bash -euxo pipefail
     version="{{VERSION}}"
-    if [[ "$version" == "latest" ]]; then
+    if [ "$version" == "latest" ]; then
         echo "Looking up latest version..."
         release=$(just get-latest-gh-release jqlang jq)
         version=$(echo "$release" | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"].split("-")[-1])')
@@ -299,7 +311,7 @@ install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
     else
         printf "Validating version %s...\n" "$version"
         release=$(just get-gh-release jqlang jq "jq-$version")
-        if [[ -n "$release" ]]; then
+        if test -n "$release"; then
             echo "Valid!"
         else
             printf "Version %s not found.\n\n" "$version" >&2; exit 1
@@ -312,7 +324,7 @@ install-jq VERSION="latest" INSTALL_DIR="$HOME/bin" TARGET="":
         x86_64-MINGW64_NT)  asset=jq-windows-amd64;;
         x86_64-Windows_NT)  asset=jq-windows-amd64;;
     esac
-    if [[ -n "{{TARGET}}" ]]; then
+    if test -n "{{TARGET}}"; then
         asset="{{TARGET}}"
     fi
     just get-gh-release-binary jqlang jq "jq-$version" "$asset" "{{INSTALL_DIR}}/jq"
@@ -339,7 +351,7 @@ _is-ancestor IMAGE:
 # Lint src/ (pylint & flake8)
 lint:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-lint/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-lint/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-lint
     fi
     source {{justfile_directory()}}/.venv-lint/bin/activate
@@ -362,12 +374,12 @@ pretty-dev-containers:
     #!/usr/bin/env -S bash -euo pipefail
     format='{"Name":.Names,"Image":.Image,"Ports":.Ports,"Created":.RunningFor,"Status":.Status}'
     if ! command -v jq >/dev/null; then jq="docker run -i --rm ghcr.io/jqlang/jq"; else jq=jq; fi
-    docker ps --filter name="{{name}}*" --format=json 2>/dev/null | eval '$jq "$format"'
+    docker ps --filter name="${APP_NAME}*" --format=json 2>/dev/null | eval '$jq "$format"'
 
 # Publish Python package to AWS CodeArtifact
 publish-aws-codeartifact: aws-codeartifact-login
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-dev/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-dev
     fi
     source {{justfile_directory()}}/.venv-dev/bin/activate
@@ -378,14 +390,14 @@ publish-aws-codeartifact: aws-codeartifact-login
 # Publish Python package to PyPI
 publish-pypi:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-dev/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-dev/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-dev
     fi
     source {{justfile_directory()}}/.venv-dev/bin/activate
     python3 -m pip install --upgrade pip
     python3 -m pip install -r requirements/requirements.txt
     poetry config --unset
-    poetry config pypi-token.pypi {{pypi_token}}
+    poetry config pypi-token.pypi ${PYPI_TOKEN}
     poetry build && poetry publish
 
 # Publish container image to AWS Elastic Container Registry
@@ -396,35 +408,35 @@ publish-aws-ecr *TAGS="": _requires-aws
     for tag in {{TAGS}}; do
         tags+=" -t $ecr/test:$tag"
     done
-    docker build --push $tags .
+    docker buildx build --push $tags .
 
 # Publish container image to AWS Elastic Container Registry
 publish-dockerhub *TAGS="":
     #!/usr/bin/env -S bash -euxo pipefail
-    tags="-t {{dockerhub_namespace}}/{{name}}:latest"
+    tags="-t ${DOCKERHUB_NAMESPACE}/${APP_NAME}:latest"
     for tag in {{TAGS}}; do
-        tags+=" -t {{dockerhub_namespace}}/{{name}}:$tag"
+        tags+=" -t ${DOCKERHUB_NAMESPACE}/${APP_NAME}:$tag"
     done
-    docker build --push $tags .
+    docker buildx build --push $tags .
 
 # Publish container image to Google Artifact Registry
 publish-gar *TAGS="": _requires-gcloud
     #!/usr/bin/env -S bash -euxo pipefail
-    tags="-t {{gcloud_region}}-docker.pkg.dev/{{gcloud_project_id}}/{{gcloud_registry}}/{{name}}:latest"
+    tags="-t ${GCLOUD_REGION}-docker.pkg.dev/${GCLOUD_PROJECT_ID}/${GCLOUD_REGISTRY}/${APP_NAME}:latest"
     for tag in {{TAGS}}; do
-        tags+=" -t {{gcloud_region}}-docker.pkg.dev/{{gcloud_project_id}}/{{gcloud_registry}}/{{name}}:$tag"
+        tags+=" -t ${GCLOUD_REGION}-docker.pkg.dev/${GCLOUD_PROJECT_ID}/${GCLOUD_REGISTRY}/${APP_NAME}:$tag"
     done
-    docker build --push $tags .
+    docker buildx build --push $tags .
 
 # Publish container image to Github Container Registry
 publish-ghcr *TAGS="":
     #!/usr/bin/env -S bash -euxo pipefail
-    docker login ghcr.io -u {{github_namespace}} -p {{ghcr_token}}
-    tags="-t ghcr.io/{{github_namespace}}/{{name}}:latest"
+    docker login ghcr.io -u ${GH_NAMESPACE} -p ${GHCR_TOKEN}
+    tags="-t ghcr.io/${GH_NAMESPACE}/${APP_NAME}:latest"
     for tag in {{TAGS}}; do
-        tags+=" -t ghcr.io/{{github_namespace}}/{{name}}:$tag"
+        tags+=" -t ghcr.io/${GH_NAMESPACE}/${APP_NAME}:$tag"
     done
-    docker build --push $tags .
+    docker buildx build --push $tags .
 
 # (AWS API util) Ensure the user is logged into AWS if possible, or exit
 _requires-aws:
@@ -433,7 +445,7 @@ _requires-aws:
         printf "You need the AWS Command Line Interface to run this command.\n\n❯ just install-aws\n\n" >&2
         exit 1
     fi
-    if [[ -z $(aws sts get-caller-identity 2>/dev/null) ]]; then
+    if test -z $(aws sts get-caller-identity 2>/dev/null); then
         aws sso login
     fi
 
@@ -444,29 +456,25 @@ _requires-gcloud:
         printf "You need the Google Cloud Command Line Interface to run this command.\n\n❯ just install-gcloud\n\n" >&2
         exit 1
     fi
-    if [[ -z $(gcloud auth list --filter=status:ACTIVE --format="value(account)") ]]; then
+    if test -z $(gcloud auth list --filter=status:ACTIVE --format="value(account)"); then
         gcloud auth login
     fi
 
 # Build and run the app
 run PORT="" NAME="": build
     #!/usr/bin/env -S bash -euo pipefail
-    port="{{localhost_port}}"
-    if [[ -z "$port" ]]; then 
-        port="{{localhost_port}}"
-    fi
     name="{{NAME}}"
-    if [[ -z "$name" ]]; then 
+    if test -z "$name"; then 
         name="flask-app-$(head -c 8 <<< `uuidgen`)"
     fi
-    docker run --rm -d --name="$name" -p "$port":5000 -e LOG_LEVEL={{log_level}} {{name}}
+    docker run --rm -d --name="${name}" -p "${APP_PORT}" -e "LOG_LEVEL=${LOG_LEVEL}" "${APP_NAME}"
 
 # Start the Docker daemon
 start-docker:
     #!/usr/bin/env -S bash -euo pipefail
     if ( ! docker stats --no-stream 2>/dev/null ); then
         echo "Starting the Docker daemon..."
-        if [[ {{os()}} == "macos" ]]; then
+        if [ "{{os()}}" = "macos" ]; then
             open /Applications/Docker.app
         else if command -v systemctl >/dev/null; then
             sudo systemctl start docker
@@ -483,7 +491,7 @@ start-docker:
 status:
     #!/usr/bin/env -S bash -euo pipefail
     containers=$(just get-dev-containers 2>/dev/null)
-    if [[ -z $containers ]]; then
+    if test -z $containers; then
         printf "\nNo development containers.\n\n";
     else
         printf "\nDevelopment Containers:\n\n"
@@ -512,31 +520,10 @@ stop-all-containers:
 # Test src/ (Pytest)
 test:
     #!/usr/bin/env -S bash -euxo pipefail
-    if [[ ! -x {{justfile_directory()}}/.venv-test/bin/activate ]]; then
+    if test ! -x {{justfile_directory()}}/.venv-test/bin/activate; then
         python3 -m venv {{justfile_directory()}}/.venv-test
     fi
     source {{justfile_directory()}}/.venv-test/bin/activate
     python3 -m pip install --upgrade pip
     python3 -m pip install -r requirements/requirements-test.txt
     pytest --verbose
-
-# Show values of justfile variables
-@vars:
-    echo name:\\t\\t\\t\\t{{name}}
-    echo log_level:\\t\\t\\t{{log_level}}
-    echo localhost_port:\\t\\t\\t{{localhost_port}}
-    echo gh_token:\\t\\t\\t{{gh_token}}
-    echo pypi_username:\\t\\t\\t{{pypi_username}}
-    echo pypi_token:\\t\\t\\t{{pypi_token}}
-    echo dockerhub_namespace:\\t\\t{{dockerhub_namespace}}
-    echo github_namespace:\\t\\t{{github_namespace}}
-    echo ghcr_token:\\t\\t\\t{{ghcr_token}}
-    echo gcloud_region:\\t\\t\\t{{gcloud_region}}
-    echo gcloud_registry:\\t\\t{{gcloud_registry}}
-    echo gcloud_project_id:\\t\\t{{gcloud_project_id}}
-    echo aws_codeartifact_domain:\\t{{aws_codeartifact_domain}}
-    echo aws_codeartifact_domain_owner:\\t{{aws_codeartifact_domain_owner}}
-    echo aws_codeartifact_repository:\\t{{aws_codeartifact_repository}}
-    echo aws_default_region:\\t\\t{{aws_default_region}}
-    echo aws_ecr_account_id:\\t\\t{{aws_ecr_account_id}}
-    echo aws_ecr_repository:\\t\\t{{aws_ecr_repository}}

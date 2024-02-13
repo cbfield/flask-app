@@ -1,4 +1,4 @@
-name: Publish Image to Google Artifact Registry
+name: Publish - Google Artifact Registry
 
 on:
   push:
@@ -6,9 +6,6 @@ on:
       - "**"
     tags:
       - "v*.*.*"
-  pull_request:
-    branches:
-      - main
 
 jobs:
   Build:

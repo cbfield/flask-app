@@ -1,0 +1,25 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*.*.*"
+
+env:
+  GH_TOKEN: ${{secrets.GH_TOKEN}}
+
+jobs:
+  Test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: extractions/setup-just@v1
+      - uses: docker/setup-buildx-action@v3
+      - name: Build
+        run: just build
+      - name: Lint
+        run: just lint
+      - name: Test
+        run: just test
