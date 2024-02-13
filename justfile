@@ -84,7 +84,9 @@ aws-ecr-login ACCOUNT="${AWS_ECR_ACCOUNT_ID}" REGION="${AWS_DEFAULT_REGION}": _r
 
 # Build the app container with Docker
 build: start-docker
+    docker buildx create --use --name=builder --driver=docker-container --platform=linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64
     docker buildx build --load -t "${APP_NAME}" .
+    docker buildx rm builder
 
 # Generate requirements*.txt from requirements*.in using pip-tools
 build-reqs-all:
