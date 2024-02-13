@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - "**"
+    tags:
+      - "v*.*.*"
 
 env:
   GH_TOKEN: ${{secrets.GH_TOKEN}}
