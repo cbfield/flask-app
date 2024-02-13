@@ -84,7 +84,7 @@ aws-ecr-login ACCOUNT="${AWS_ECR_ACCOUNT_ID}" REGION="${AWS_DEFAULT_REGION}": _r
 
 # Build the app container with Docker
 build: start-docker
-    docker build -t "${APP_NAME}" .
+    docker buildx build --load -t "${APP_NAME}" .
 
 # Generate requirements*.txt from requirements*.in using pip-tools
 build-reqs-all:
@@ -399,7 +399,7 @@ publish-aws-ecr *TAGS="": _requires-aws
     for tag in {{TAGS}}; do
         tags+=" -t $ecr/test:$tag"
     done
-    docker build --push $tags .
+    docker buildx build --push $tags .
 
 # Publish container image to AWS Elastic Container Registry
 publish-dockerhub *TAGS="":
@@ -408,7 +408,7 @@ publish-dockerhub *TAGS="":
     for tag in {{TAGS}}; do
         tags+=" -t ${DOCKERHUB_NAMESPACE}/${APP_NAME}:$tag"
     done
-    docker build --push $tags .
+    docker buildx build --push $tags .
 
 # Publish container image to Google Artifact Registry
 publish-gar *TAGS="": _requires-gcloud
@@ -417,7 +417,7 @@ publish-gar *TAGS="": _requires-gcloud
     for tag in {{TAGS}}; do
         tags+=" -t ${GCLOUD_REGION}-docker.pkg.dev/${GCLOUD_PROJECT_ID}/${GCLOUD_REGISTRY}/${APP_NAME}:$tag"
     done
-    docker build --push $tags .
+    docker buildx build --push $tags .
 
 # Publish container image to Github Container Registry
 publish-ghcr *TAGS="":
@@ -427,7 +427,7 @@ publish-ghcr *TAGS="":
     for tag in {{TAGS}}; do
         tags+=" -t ghcr.io/${GH_NAMESPACE}/${APP_NAME}:$tag"
     done
-    docker build --push $tags .
+    docker buildx build --push $tags .
 
 # (AWS API util) Ensure the user is logged into AWS if possible, or exit
 _requires-aws:
