@@ -9,6 +9,7 @@ set export
 APP_NAME := `echo ${APP_NAME:-flask-app}`
 APP_LOG_LEVEL := `echo ${APP_LOG_LEVEL:-INFO}`
 APP_PORT := `echo ${APP_PORT:-5001}`
+BUILDX_BUILDER := `echo ${BUILDX_BUILDER:-builder}`
 
 AWS_DEFAULT_REGION := `echo ${AWS_DEFAULT_REGION:-us-west-2}`
 AWS_ECR_REPOSITORY := `echo ${AWS_ECR_REPOSITORY:-flask-app}`
@@ -84,9 +85,15 @@ aws-ecr-login ACCOUNT="${AWS_ECR_ACCOUNT_ID}" REGION="${AWS_DEFAULT_REGION}": _r
 
 # Build the app container with Docker
 build: start-docker
-    docker buildx create --use --name=builder --driver=docker-container --platform=linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64
-    docker buildx build --load -t "${APP_NAME}" .
-    docker buildx rm builder
+    #!/usr/bin/env -S bash -uxo pipefail
+    builder=$(docker buildx inspect "${BUILDX_BUILDER}" 2>/dev/null)
+    if test -z "$builder"; then
+        docker buildx create \
+            --name=${BUILDX_BUILDER} \
+            --driver=docker-container \
+            --platform=linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64
+    fi
+    docker buildx build --builder="${BUILDX_BUILDER}" --load -t "${APP_NAME}" .
 
 # Generate requirements*.txt from requirements*.in using pip-tools
 build-reqs-all:
