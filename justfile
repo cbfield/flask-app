@@ -467,7 +467,7 @@ run PORT="" NAME="": build
     if test -z "$name"; then 
         name="flask-app-$(head -c 8 <<< `uuidgen`)"
     fi
-    docker run --rm -d --name="${name}" -p "${APP_PORT}" -e "LOG_LEVEL=${LOG_LEVEL}" "${APP_NAME}"
+    docker run --rm -d --name="${name}" -p "${APP_PORT}" -e "LOG_LEVEL=${APP_LOG_LEVEL}" "${APP_NAME}"
 
 # Start the Docker daemon
 start-docker:
